@@ -1,0 +1,93 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <meta name="color-scheme" content="light dark" />
+  <title>Trip ON AI Server Dashboard</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <main class="page">
+    <header class="topbar">
+      <div>
+        <p class="eyebrow">Trip ON</p>
+        <h1>AI Server Dashboard</h1>
+        <p class="sub">Qwen / Ollama server health, load balancing and remote controls.</p>
+      </div>
+      <div class="top-actions">
+        <span id="modeBadge" class="badge neutral">DEMO MODE</span>
+        <button id="refreshBtn" class="btn secondary" type="button">Refresh</button>
+      </div>
+    </header>
+
+    <section class="summary-grid" aria-label="Summary">
+      <article class="summary-card">
+        <span class="summary-label">Servers online</span>
+        <strong id="onlineCount">0 / 0</strong>
+      </article>
+      <article class="summary-card">
+        <span class="summary-label">Active requests</span>
+        <strong id="activeRequests">0</strong>
+      </article>
+      <article class="summary-card">
+        <span class="summary-label">Average latency</span>
+        <strong id="avgLatency">—</strong>
+      </article>
+      <article class="summary-card">
+        <span class="summary-label">Routing status</span>
+        <strong id="routingStatus">Standby</strong>
+      </article>
+    </section>
+
+    <section class="section-head">
+      <div>
+        <h2>AI Servers</h2>
+        <p>New requests should prefer the healthiest available server.</p>
+      </div>
+    </section>
+
+    <section id="serverGrid" class="server-grid" aria-live="polite"></section>
+
+    <section class="section-head">
+      <div>
+        <h2>Recent control activity</h2>
+        <p>Restart and shutdown actions are recorded locally in demo mode.</p>
+      </div>
+    </section>
+
+    <section class="activity-panel">
+      <div id="activityEmpty" class="empty">No control commands yet.</div>
+      <ul id="activityList" class="activity-list"></ul>
+    </section>
+  </main>
+
+  <dialog id="authDialog" class="modal">
+    <form id="authForm" method="dialog">
+      <div class="modal-head">
+        <div>
+          <p class="eyebrow">Protected action</p>
+          <h3 id="authTitle">Confirm command</h3>
+        </div>
+        <button id="closeAuthBtn" type="button" class="icon-btn" aria-label="Close">×</button>
+      </div>
+      <p id="authText" class="modal-copy"></p>
+      <label class="field">
+        <span>Control password</span>
+        <input id="passwordInput" type="password" autocomplete="current-password" required />
+      </label>
+      <label id="confirmLabel" class="confirm-check">
+        <input id="dangerConfirm" type="checkbox" />
+        <span>I understand this can interrupt service.</span>
+      </label>
+      <p id="authError" class="error" role="alert"></p>
+      <div class="modal-actions">
+        <button id="cancelAuthBtn" type="button" class="btn secondary">Cancel</button>
+        <button id="confirmAuthBtn" type="submit" class="btn danger">Confirm</button>
+      </div>
+    </form>
+  </dialog>
+
+  <script src="app.js"></script>
+</body>
+</html>
