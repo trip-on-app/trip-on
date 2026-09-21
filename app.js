@@ -6,6 +6,10 @@ const demoServers = [
     id: "pc1",
     name: "PC 1 · Legion",
     subtitle: "Gaming / backup AI server",
+    batteryPercent: 76,
+    acConnected: true,
+    charging: true,
+    estimatedRuntimeMin: 145,
     online: true,
     cpu: 42,
     ramUsedGb: 14.2,
@@ -25,7 +29,11 @@ const demoServers = [
   {
     id: "pc2",
     name: "PC 2 · AI Server",
-    subtitle: "Primary Qwen server",
+    subtitle: "Primary AI server",
+    batteryPercent: null,
+    acConnected: null,
+    charging: null,
+    estimatedRuntimeMin: null,
     online: true,
     cpu: 19,
     ramUsedGb: 11.4,
@@ -126,6 +134,12 @@ function serverCard(s) {
     ? `${s.vramUsedGb.toFixed(1)} / ${s.vramTotalGb} GB`
     : "N/A";
   const tempDisplay = Number.isFinite(s.gpuTempC) ? `${s.gpuTempC}°C` : "N/A";
+  const batteryDisplay = Number.isFinite(s.batteryPercent) ? `${Math.round(s.batteryPercent)}%` : "N/A";
+  const powerDisplay = s.acConnected === true ? "AC Connected" : s.acConnected === false ? "Battery" : "N/A";
+  const chargingDisplay = s.charging === true ? "Charging" : s.charging === false && Number.isFinite(s.batteryPercent) ? "Not charging" : "N/A";
+  const runtimeDisplay = Number.isFinite(s.estimatedRuntimeMin)
+    ? `${Math.floor(s.estimatedRuntimeMin / 60)}h ${Math.round(s.estimatedRuntimeMin % 60)}m`
+    : "N/A";
 
   return `
     <article class="server-card ${s.online ? "" : "offline-card"}">
@@ -149,6 +163,10 @@ function serverCard(s) {
         <div class="status-item"><span>Ollama</span>${statusBadge(s.ollama)}</div>
         <div class="status-item"><span>Tunnel</span>${statusBadge(s.tunnel, "Connected", "Disconnected")}</div>
         <div class="status-item"><span>GPU temp</span><strong>${tempDisplay}</strong></div>
+        <div class="status-item"><span>Battery</span><strong>${batteryDisplay}</strong></div>
+        <div class="status-item"><span>Power</span><strong>${powerDisplay}</strong></div>
+        <div class="status-item"><span>Charging</span><strong>${chargingDisplay}</strong></div>
+        <div class="status-item"><span>Battery runtime</span><strong>${runtimeDisplay}</strong></div>
         <div class="status-item"><span>Requests</span><strong>${s.activeRequests ?? 0}</strong></div>
         <div class="status-item"><span>Latency</span><strong>${Number.isFinite(s.latencyMs) ? s.latencyMs + " ms" : "—"}</strong></div>
       </div>
