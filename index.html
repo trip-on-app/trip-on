@@ -4,90 +4,76 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <meta name="color-scheme" content="light dark" />
-  <title>Trip ON AI Server Dashboard</title>  <link rel="icon" type="image/png" sizes="64x64" href="./favicon.png?v=6" />  <link rel="apple-touch-icon" href="./favicon.png?v=6" />
+  <title>Trip ON AI 관리자</title>
+  <link rel="icon" type="image/png" sizes="64x64" href="./favicon.png?v=6" />
+  <link rel="apple-touch-icon" href="./favicon.png?v=6" />
   <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
-  <main class="page">
+  <main id="loginView" class="login-page">
+    <form id="loginForm" class="login-card">
+      <p class="eyebrow">TRIP ON</p>
+      <h1>AI 관리자 로그인</h1>
+      <p class="sub">로컬 Gemma AI 서버의 상태와 요청 현황을 확인합니다.</p>
+      <label class="field">
+        <span>관리자 ID</span>
+        <input id="adminId" name="id" autocomplete="username" required autofocus />
+      </label>
+      <label class="field">
+        <span>비밀번호</span>
+        <input id="adminPassword" name="password" type="password" autocomplete="current-password" required />
+      </label>
+      <p id="loginError" class="error" role="alert"></p>
+      <button class="btn primary wide" type="submit">로그인</button>
+    </form>
+  </main>
+
+  <main id="dashboardView" class="page" hidden>
     <header class="topbar">
       <div>
         <p class="eyebrow">Trip ON</p>
-        <h1>AI Server Dashboard</h1>
-        <p class="sub">Qwen / Ollama server health, load balancing and remote controls.</p>
+        <h1>AI 서버 대시보드</h1>
+        <p class="sub">Gemma 3 / Ollama 로컬 게이트웨이의 상태를 확인합니다.</p>
       </div>
       <div class="top-actions">
-        <span id="modeBadge" class="badge neutral">DEMO MODE</span>
-        <button id="refreshBtn" class="btn secondary" type="button">Refresh</button>
+        <span id="modeBadge" class="badge neutral">연결 확인 중</span>
+        <button id="refreshBtn" class="btn secondary" type="button">새로고침</button>
+        <button id="logoutBtn" class="btn secondary" type="button">로그아웃</button>
       </div>
     </header>
 
-    <section class="summary-grid" aria-label="Summary">
-      <article class="summary-card">
-        <span class="summary-label">Servers online</span>
-        <strong id="onlineCount">0 / 0</strong>
-      </article>
-      <article class="summary-card">
-        <span class="summary-label">Active requests</span>
-        <strong id="activeRequests">0</strong>
-      </article>
-      <article class="summary-card">
-        <span class="summary-label">Average latency</span>
-        <strong id="avgLatency">—</strong>
-      </article>
-      <article class="summary-card">
-        <span class="summary-label">Routing status</span>
-        <strong id="routingStatus">Standby</strong>
-      </article>
+    <section class="summary-grid" aria-label="요약">
+      <article class="summary-card"><span class="summary-label">온라인 서버</span><strong id="onlineCount">—</strong></article>
+      <article class="summary-card"><span class="summary-label">진행 중 요청</span><strong id="activeRequests">—</strong></article>
+      <article class="summary-card"><span class="summary-label">평균 응답 시간</span><strong id="avgLatency">—</strong></article>
+      <article class="summary-card"><span class="summary-label">라우팅 상태</span><strong id="routingStatus">확인 중</strong></article>
     </section>
 
     <section class="section-head">
-      <div>
-        <h2>AI Servers</h2>
-        <p>New requests should prefer the healthiest available server.</p>
-      </div>
+      <div><h2>AI 서버</h2><p>사용자 질문 원문은 이 화면에 표시하거나 저장하지 않습니다.</p></div>
     </section>
-
     <section id="serverGrid" class="server-grid" aria-live="polite"></section>
 
     <section class="section-head">
-      <div>
-        <h2>Recent control activity</h2>
-        <p>Restart and shutdown actions are recorded locally in demo mode.</p>
-      </div>
+      <div><h2>최근 제어 활동</h2><p>관리자 인증된 명령의 결과만 표시합니다.</p></div>
     </section>
-
     <section class="activity-panel">
-      <div id="activityEmpty" class="empty">No control commands yet.</div>
+      <div id="activityEmpty" class="empty">기록된 제어 명령이 없습니다.</div>
       <ul id="activityList" class="activity-list"></ul>
     </section>
   </main>
 
-  <dialog id="authDialog" class="modal">
-    <form id="authForm" method="dialog">
-      <div class="modal-head">
-        <div>
-          <p class="eyebrow">Protected action</p>
-          <h3 id="authTitle">Confirm command</h3>
-        </div>
-        <button id="closeAuthBtn" type="button" class="icon-btn" aria-label="Close">×</button>
-      </div>
-      <p id="authText" class="modal-copy"></p>
-      <label class="field">
-        <span>Control password</span>
-        <input id="passwordInput" type="password" autocomplete="current-password" required />
-      </label>
-      <label id="confirmLabel" class="confirm-check">
-        <input id="dangerConfirm" type="checkbox" />
-        <span>I understand this can interrupt service.</span>
-      </label>
-      <p id="authError" class="error" role="alert"></p>
-      <div class="modal-actions">
-        <button id="cancelAuthBtn" type="button" class="btn secondary">Cancel</button>
-        <button id="confirmAuthBtn" type="submit" class="btn danger">Confirm</button>
-      </div>
+  <dialog id="confirmDialog" class="modal">
+    <form id="confirmForm" method="dialog">
+      <div class="modal-head"><div><p class="eyebrow">관리자 명령</p><h3 id="confirmTitle">명령 확인</h3></div><button id="closeConfirmBtn" type="button" class="icon-btn" aria-label="닫기">×</button></div>
+      <p id="confirmText" class="modal-copy"></p>
+      <label id="confirmLabel" class="confirm-check"><input id="dangerConfirm" type="checkbox" /><span>서비스가 일시 중단될 수 있음을 확인했습니다.</span></label>
+      <p id="confirmError" class="error" role="alert"></p>
+      <div class="modal-actions"><button id="cancelConfirmBtn" type="button" class="btn secondary">취소</button><button class="btn danger" type="submit">실행</button></div>
     </form>
   </dialog>
 
+  <script src="config.js"></script>
   <script src="app.js"></script>
 </body>
 </html>
