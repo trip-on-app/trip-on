@@ -73,14 +73,14 @@ async function requireAdmin(request: Request, env: Env, cors: Headers): Promise<
   return await sessionIsValid(request, env) ? null : json({ error: "AUTH_REQUIRED" }, 401, cors);
 }
 
-async function proxyStatus(env: Env): Promise<Response> {
+async function proxyStatus(env: Env, cors: Headers): Promise<Response> {
   const upstream = await fetch(env.ADMIN_STATUS_URL, {
     headers: { "X-TripOn-Gateway-Token": env.ADMIN_STATUS_TOKEN },
     signal: AbortSignal.timeout(10_000),
   });
-  if (!upstream.ok) return json({ error: "UPSTREAM_UNAVAILABLE" }, 503);
+  if (!upstream.ok) return json({ error: "UPSTREAM_UNAVAILABLE" }, 503, cors);
   const payload = await upstream.json<unknown>();
-  return json(payload);
+  return json(payload, 200, cors);
 }
 
 export default {
@@ -112,7 +112,7 @@ export default {
     if (denied) return denied;
 
     if (request.method === "GET" && url.pathname === "/api/servers") {
-      return proxyStatus(env);
+      return proxyStatus(env, cors);
     }
 
     if (request.method === "POST" && url.pathname === "/api/control") {
