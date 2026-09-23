@@ -15,32 +15,29 @@
       <p class="eyebrow">TRIP ON</p>
       <h1>AI 관리자 로그인</h1>
       <p class="sub">로컬 Gemma AI 서버의 상태와 요청 현황을 확인합니다.</p>
-      <label class="field">
-        <span>관리자 ID</span>
-        <input id="adminId" name="id" autocomplete="username" required autofocus />
-      </label>
-      <label class="field">
-        <span>비밀번호</span>
-        <input id="adminPassword" name="password" type="password" autocomplete="current-password" required />
-      </label>
+      <label class="field"><span>관리자 ID</span><input id="adminId" name="id" autocomplete="username" required autofocus /></label>
+      <label class="field"><span>비밀번호</span><input id="adminPassword" name="password" type="password" autocomplete="current-password" required /></label>
       <p id="loginError" class="error" role="alert"></p>
       <button class="btn primary wide" type="submit">로그인</button>
     </form>
   </main>
 
   <main id="dashboardView" class="page" hidden>
-    <header class="topbar">
-      <div>
-        <p class="eyebrow">Trip ON</p>
-        <h1>AI 서버 대시보드</h1>
-        <p class="sub">Gemma 3 / Ollama 로컬 게이트웨이의 상태를 확인합니다.</p>
+    <section class="flight-board" aria-label="여행 항공편 보드">
+      <div class="flight-board-actions">
+        <div><p class="flight-board-brand">TRIP ON</p><span class="flight-board-title">AI 관리자</span></div>
+        <div class="top-actions">
+          <span id="modeBadge" class="badge flight-badge">연결 확인 중</span>
+          <button id="refreshBtn" class="btn flight-action" type="button">새로고침</button>
+          <button id="logoutBtn" class="btn flight-action" type="button">로그아웃</button>
+        </div>
       </div>
-      <div class="top-actions">
-        <span id="modeBadge" class="badge neutral">연결 확인 중</span>
-        <button id="refreshBtn" class="btn secondary" type="button">새로고침</button>
-        <button id="logoutBtn" class="btn secondary" type="button">로그아웃</button>
+      <div class="flight-route">
+        <div class="flight-place flight-place-left"><strong id="departureTime">18:40</strong><span id="departureCode">ICN</span></div>
+        <div class="flight-plane" aria-hidden="true">✈</div>
+        <div class="flight-place flight-place-right"><strong id="arrivalTime">20:55</strong><span id="arrivalCode">NRT</span></div>
       </div>
-    </header>
+    </section>
 
     <section class="summary-grid" aria-label="요약">
       <article class="summary-card"><span class="summary-label">온라인 서버</span><strong id="onlineCount">—</strong></article>
@@ -49,18 +46,11 @@
       <article class="summary-card"><span class="summary-label">라우팅 상태</span><strong id="routingStatus">확인 중</strong></article>
     </section>
 
-    <section class="section-head">
-      <div><h2>AI 서버</h2><p>사용자 질문 원문은 이 화면에 표시하거나 저장하지 않습니다.</p></div>
-    </section>
+    <section class="section-head"><div><h2>AI 서버</h2><p>사용자 질문 원문은 이 화면에 표시하거나 저장하지 않습니다.</p></div></section>
     <section id="serverGrid" class="server-grid" aria-live="polite"></section>
 
-    <section class="section-head">
-      <div><h2>최근 제어 활동</h2><p>관리자 인증된 명령의 결과만 표시합니다.</p></div>
-    </section>
-    <section class="activity-panel">
-      <div id="activityEmpty" class="empty">기록된 제어 명령이 없습니다.</div>
-      <ul id="activityList" class="activity-list"></ul>
-    </section>
+    <section class="section-head"><div><h2>최근 제어 활동</h2><p>관리자 인증된 명령의 결과만 표시합니다.</p></div></section>
+    <section class="activity-panel"><div id="activityEmpty" class="empty">기록된 제어 명령이 없습니다.</div><ul id="activityList" class="activity-list"></ul></section>
   </main>
 
   <dialog id="confirmDialog" class="modal">
@@ -72,7 +62,6 @@
       <div class="modal-actions"><button id="cancelConfirmBtn" type="button" class="btn secondary">취소</button><button class="btn danger" type="submit">실행</button></div>
     </form>
   </dialog>
-
   <script src="config.js"></script>
   <script src="app.js"></script>
 </body>

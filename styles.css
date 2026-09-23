@@ -182,3 +182,79 @@ h3 { margin-bottom: 6px; }
 }
 .login-card h1 { font-size: 30px; }
 .wide { width: 100%; margin-top: 18px; }
+
+/* Flight-board hero */
+.flight-board {
+  margin: -32px 0 28px;
+  padding: 26px 32px 34px;
+  color: #fff;
+  background: linear-gradient(135deg, #4d91e5 0%, #5799ea 55%, #4d8ede 100%);
+  border-radius: 0 0 30px 30px;
+  box-shadow: 0 16px 34px rgba(55, 123, 206, .22);
+}
+.flight-board-actions {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 20px;
+}
+.flight-board-brand {
+  margin: 0 0 3px;
+  color: rgba(255, 255, 255, .72);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: .16em;
+}
+.flight-board-title { color: rgba(255, 255, 255, .92); font-size: 14px; font-weight: 700; }
+.flight-badge { color: #fff; border-color: rgba(255, 255, 255, .36); background: rgba(255, 255, 255, .16); }
+.flight-action { color: #fff; border: 1px solid rgba(255, 255, 255, .34); background: rgba(255, 255, 255, .12); }
+.flight-route {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 120px minmax(0, 1fr);
+  align-items: center;
+  gap: 20px;
+  margin-top: 32px;
+}
+.flight-place { display: grid; gap: 6px; }
+.flight-place strong {
+  color: #fff;
+  font-size: clamp(48px, 8.3vw, 108px);
+  font-weight: 800;
+  line-height: .92;
+  letter-spacing: -.065em;
+}
+.flight-place span {
+  color: rgba(255, 255, 255, .8);
+  font-size: clamp(19px, 2.3vw, 32px);
+  font-weight: 800;
+  letter-spacing: -.03em;
+}
+.flight-place-right { text-align: right; justify-items: end; }
+.flight-plane {
+  position: relative;
+  color: #fff;
+  font-size: 50px;
+  line-height: 1;
+  text-align: center;
+  transform: rotate(7deg);
+}
+.flight-plane::after {
+  position: absolute;
+  right: 11px;
+  bottom: -13px;
+  width: 45px;
+  height: 5px;
+  border-radius: 999px;
+  background: #fff;
+  content: "";
+}
+@media (max-width: 620px) {
+  .flight-board { margin: -20px -10px 24px; padding: 20px 20px 28px; border-radius: 0 0 24px 24px; }
+  .flight-board-actions { align-items: center; }
+  .flight-board .top-actions { justify-content: flex-end; }
+  .flight-board .top-actions .btn { padding: 7px 9px; font-size: 12px; }
+  .flight-badge { display: none; }
+  .flight-route { grid-template-columns: minmax(0, 1fr) 58px minmax(0, 1fr); gap: 10px; margin-top: 30px; }
+  .flight-plane { font-size: 32px; }
+  .flight-plane::after { right: 5px; bottom: -9px; width: 29px; height: 4px; }
+}
