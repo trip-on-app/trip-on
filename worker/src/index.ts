@@ -6,6 +6,7 @@ export interface Env {
   ADMIN_STATUS_TOKEN: string;
   ADMIN_CONTROL_URL?: string;
   DASHBOARD_ORIGIN: string;
+  DB: D1Database;
 }
 
 const sessionMaxAgeSeconds = 60 * 60 * 8;
@@ -26,7 +27,7 @@ function corsHeaders(request: Request, env: Env): Headers {
     headers.set("access-control-allow-origin", origin);
     headers.set("access-control-allow-credentials", "true");
     headers.set("access-control-allow-headers", "authorization, content-type");
-    headers.set("access-control-allow-methods", "GET, POST, OPTIONS");
+    headers.set("access-control-allow-methods", "GET, POST, PUT, OPTIONS");
   }
   return headers;
 }
@@ -83,6 +84,42 @@ async function proxyStatus(env: Env, cors: Headers): Promise<Response> {
   return json(payload, 200, cors);
 }
 
+type PromotionInput = { code?: unknown; plan?: unknown; people?: unknown; date?: unknown };
+
+function promotionInput(body: PromotionInput): { code: string; plan: "Pro" | "Enterprise"; people: number | null; date: string | null } | null {
+  const code = typeof body.code === "string" ? body.code.trim().toUpperCase() : "";
+  const plan = body.plan === "Pro" || body.plan === "Enterprise" ? body.plan : null;
+  const people = body.people === null || body.people === undefined || body.people === "" ? null : Number(body.people);
+  const date = body.date === null || body.date === undefined || body.date === "" ? null : String(body.date);
+  if (!/^[A-Z0-9_-]{4,48}$/.test(code) || !plan || (people !== null && (!Number.isInteger(people) || people < 1)) || (date !== null && !/^\d{4}-\d{2}-\d{2}$/.test(date))) return null;
+  return { code, plan, people, date };
+}
+
+async function listPromotions(env: Env, cors: Headers): Promise<Response> {
+  const result = await env.DB.prepare("SELECT id, code, plan, max_uses AS people, used_count AS used, expires_at AS date, created_at AS createdAt, updated_at AS updatedAt FROM admin_promotions ORDER BY updated_at DESC").all();
+  return json({ promotions: result.results }, 200, cors);
+}
+
+async function savePromotion(request: Request, env: Env, cors: Headers, id?: string): Promise<Response> {
+  const body = await request.json<PromotionInput>().catch(() => ({}));
+  const input = promotionInput(body);
+  if (!input) return json({ error: "INVALID_PROMOTION" }, 400, cors);
+  const now = new Date().toISOString();
+  const promotionId = id ?? crypto.randomUUID();
+  try {
+    if (id) {
+      const result = await env.DB.prepare("UPDATE admin_promotions SET code = ?, plan = ?, max_uses = ?, expires_at = ?, updated_at = ? WHERE id = ?").bind(input.code, input.plan, input.people, input.date, now, promotionId).run();
+      if (!result.meta.changes) return json({ error: "PROMOTION_NOT_FOUND" }, 404, cors);
+    } else {
+      await env.DB.prepare("INSERT INTO admin_promotions (id, code, plan, max_uses, expires_at, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)").bind(promotionId, input.code, input.plan, input.people, input.date, now, now).run();
+    }
+  } catch (error) {
+    if (String(error).includes("UNIQUE constraint failed")) return json({ error: "DUPLICATE_CODE" }, 409, cors);
+    throw error;
+  }
+  return json({ ok: true, id: promotionId }, id ? 200 : 201, cors);
+}
+
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     const url = new URL(request.url);
@@ -113,6 +150,19 @@ export default {
 
     if (request.method === "GET" && url.pathname === "/api/servers") {
       return proxyStatus(env, cors);
+    }
+
+    if (request.method === "GET" && url.pathname === "/api/promotions") {
+      return listPromotions(env, cors);
+    }
+
+    if (request.method === "POST" && url.pathname === "/api/promotions") {
+      return savePromotion(request, env, cors);
+    }
+
+    const promotionMatch = url.pathname.match(/^\/api\/promotions\/([0-9a-f-]{36})$/i);
+    if (request.method === "PUT" && promotionMatch) {
+      return savePromotion(request, env, cors, promotionMatch[1]);
     }
 
     if (request.method === "POST" && url.pathname === "/api/control") {
