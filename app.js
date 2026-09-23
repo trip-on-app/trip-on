@@ -3,6 +3,13 @@ const REFRESH_MS = 10000;
 let servers = [];
 let pendingAction = null;
 let timer = null;
+const flight = {
+  departureTime: "18:40",
+  arrivalTime: "20:55",
+  departureCode: "ICN",
+  arrivalCode: "NRT",
+  ...(window.TRIPON_DASHBOARD_FLIGHT || {})
+};
 
 const els = {
   loginView: document.querySelector("#loginView"),
@@ -26,7 +33,11 @@ const els = {
   dangerConfirm: document.querySelector("#dangerConfirm"),
   confirmError: document.querySelector("#confirmError"),
   closeConfirmBtn: document.querySelector("#closeConfirmBtn"),
-  cancelConfirmBtn: document.querySelector("#cancelConfirmBtn")
+  cancelConfirmBtn: document.querySelector("#cancelConfirmBtn"),
+  departureTime: document.querySelector("#departureTime"),
+  arrivalTime: document.querySelector("#arrivalTime"),
+  departureCode: document.querySelector("#departureCode"),
+  arrivalCode: document.querySelector("#arrivalCode")
 };
 
 function escapeHtml(value) {
@@ -86,6 +97,13 @@ function serverCard(server) {
     '<div class="controls">' + actions.map(([action, label]) => '<button class="btn ' + (["restart_pc", "shutdown"].includes(action) ? "ghost-danger" : "secondary") + ' control-btn" data-server="' + escapeHtml(server.id) + '" data-action="' + action + '">' + label + '</button>').join("") + '</div></article>';
 }
 
+function renderFlightBoard() {
+  els.departureTime.textContent = flight.departureTime;
+  els.arrivalTime.textContent = flight.arrivalTime;
+  els.departureCode.textContent = flight.departureCode;
+  els.arrivalCode.textContent = flight.arrivalCode;
+}
+
 function render() {
   const online = servers.filter(server => server.online);
   const active = servers.reduce((sum, server) => sum + (Number(server.activeRequests) || 0), 0);
@@ -132,6 +150,7 @@ async function loadServers() {
 function showDashboard() {
   els.loginView.hidden = true;
   els.dashboardView.hidden = false;
+  renderFlightBoard();
   loadServers();
   timer = setInterval(loadServers, REFRESH_MS);
 }
