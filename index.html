@@ -12,32 +12,39 @@
 <body>
   <main id="loginView" class="login-page">
     <form id="loginForm" class="login-card">
-      <p class="eyebrow">TRIP ON</p>
-      <h1>AI 관리자 로그인</h1>
-      <p class="sub">로컬 Gemma AI 서버의 상태와 요청 현황을 확인합니다.</p>
+      <p class="eyebrow">TRIP ON</p><h1>AI 관리자 로그인</h1><p class="sub">로컬 Gemma AI 서버의 상태와 요청 현황을 확인합니다.</p>
       <label class="field"><span>관리자 ID</span><input id="adminId" name="id" autocomplete="username" required autofocus /></label>
       <label class="field"><span>비밀번호</span><input id="adminPassword" name="password" type="password" autocomplete="current-password" required /></label>
-      <p id="loginError" class="error" role="alert"></p>
-      <button class="btn primary wide" type="submit">로그인</button>
+      <p id="loginError" class="error" role="alert"></p><button class="btn primary wide" type="submit">로그인</button>
     </form>
   </main>
 
   <main id="dashboardView" class="page" hidden>
-    <section class="flight-board" aria-label="여행 항공편 보드">
-      <div class="flight-board-actions">
-        <div><p class="flight-board-brand">TRIP ON</p><span class="flight-board-title">AI 관리자</span></div>
-        <div class="top-actions">
-          <span id="modeBadge" class="badge flight-badge">연결 확인 중</span>
-          <button id="refreshBtn" class="btn flight-action" type="button">새로고침</button>
-          <button id="logoutBtn" class="btn flight-action" type="button">로그아웃</button>
-        </div>
+    <header class="flight-detail-nav">
+      <button class="flight-nav-button" type="button" aria-label="뒤로가기">←</button>
+      <h1>항공편 상세</h1>
+      <button class="flight-nav-button" type="button" aria-label="항공편 편집">✎</button>
+    </header>
+
+    <section class="flight-detail-card" aria-label="항공편 정보">
+      <div class="flight-detail-top"><strong id="airlineName">이스타항공</strong><strong id="flightNumber">ZE605</strong></div>
+      <div class="flight-detail-route">
+        <div class="flight-detail-place"><strong id="departureAt">2026.09.29 07:25</strong><span id="departureCode">ICN</span></div>
+        <div class="flight-detail-plane" aria-hidden="true">✈</div>
+        <div class="flight-detail-place flight-detail-place-right"><strong id="arrivalAt">2026.09.29 09:55</strong><span id="arrivalCode">NRT</span></div>
       </div>
-      <div class="flight-route">
-        <div class="flight-place flight-place-left"><strong id="departureTime">18:40</strong><span id="departureCode">ICN</span></div>
-        <div class="flight-plane" aria-hidden="true">✈</div>
-        <div class="flight-place flight-place-right"><strong id="arrivalTime">20:55</strong><span id="arrivalCode">NRT</span></div>
+      <div class="flight-detail-meta">
+        <div><span>터미널</span><strong id="terminalValue">P02</strong></div>
+        <div><span>게이트</span><strong id="gateValue">확인 중</strong></div>
+        <div><span>좌석</span><strong id="seatValue">확인 중</strong></div>
       </div>
     </section>
+
+    <div class="dashboard-actions">
+      <span id="modeBadge" class="badge neutral">연결 확인 중</span>
+      <button id="refreshBtn" class="btn secondary" type="button">새로고침</button>
+      <button id="logoutBtn" class="btn secondary" type="button">로그아웃</button>
+    </div>
 
     <section class="summary-grid" aria-label="요약">
       <article class="summary-card"><span class="summary-label">온라인 서버</span><strong id="onlineCount">—</strong></article>
@@ -48,7 +55,6 @@
 
     <section class="section-head"><div><h2>AI 서버</h2><p>사용자 질문 원문은 이 화면에 표시하거나 저장하지 않습니다.</p></div></section>
     <section id="serverGrid" class="server-grid" aria-live="polite"></section>
-
     <section class="section-head"><div><h2>최근 제어 활동</h2><p>관리자 인증된 명령의 결과만 표시합니다.</p></div></section>
     <section class="activity-panel"><div id="activityEmpty" class="empty">기록된 제어 명령이 없습니다.</div><ul id="activityList" class="activity-list"></ul></section>
   </main>
@@ -56,13 +62,10 @@
   <dialog id="confirmDialog" class="modal">
     <form id="confirmForm" method="dialog">
       <div class="modal-head"><div><p class="eyebrow">관리자 명령</p><h3 id="confirmTitle">명령 확인</h3></div><button id="closeConfirmBtn" type="button" class="icon-btn" aria-label="닫기">×</button></div>
-      <p id="confirmText" class="modal-copy"></p>
-      <label id="confirmLabel" class="confirm-check"><input id="dangerConfirm" type="checkbox" /><span>서비스가 일시 중단될 수 있음을 확인했습니다.</span></label>
-      <p id="confirmError" class="error" role="alert"></p>
-      <div class="modal-actions"><button id="cancelConfirmBtn" type="button" class="btn secondary">취소</button><button class="btn danger" type="submit">실행</button></div>
+      <p id="confirmText" class="modal-copy"></p><label id="confirmLabel" class="confirm-check"><input id="dangerConfirm" type="checkbox" /><span>서비스가 일시 중단될 수 있음을 확인했습니다.</span></label>
+      <p id="confirmError" class="error" role="alert"></p><div class="modal-actions"><button id="cancelConfirmBtn" type="button" class="btn secondary">취소</button><button class="btn danger" type="submit">실행</button></div>
     </form>
   </dialog>
-  <script src="config.js"></script>
-  <script src="app.js"></script>
+  <script src="config.js"></script><script src="app.js"></script>
 </body>
 </html>

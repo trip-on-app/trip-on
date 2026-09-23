@@ -1,10 +1,15 @@
 // Public deployment configuration only. This URL contains no credentials.
 window.TRIPON_ADMIN_API_BASE = "";
 
-// This board is presentational metadata, not live flight data.
+// Display-only flight card metadata. It is not live flight data.
 window.TRIPON_DASHBOARD_FLIGHT = {
-  departureTime: "18:40",
-  arrivalTime: "20:55",
+  airlineName: "이스타항공",
+  flightNumber: "ZE605",
+  departureAt: "2026.09.29 07:25",
+  arrivalAt: "2026.09.29 09:55",
   departureCode: "ICN",
-  arrivalCode: "NRT"
+  arrivalCode: "NRT",
+  terminal: "P02",
+  gate: "확인 중",
+  seat: "확인 중"
 };

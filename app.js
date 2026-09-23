@@ -4,10 +4,15 @@ let servers = [];
 let pendingAction = null;
 let timer = null;
 const flight = {
-  departureTime: "18:40",
-  arrivalTime: "20:55",
+  airlineName: "이스타항공",
+  flightNumber: "ZE605",
+  departureAt: "2026.09.29 07:25",
+  arrivalAt: "2026.09.29 09:55",
   departureCode: "ICN",
   arrivalCode: "NRT",
+  terminal: "P02",
+  gate: "확인 중",
+  seat: "확인 중",
   ...(window.TRIPON_DASHBOARD_FLIGHT || {})
 };
 
@@ -34,10 +39,15 @@ const els = {
   confirmError: document.querySelector("#confirmError"),
   closeConfirmBtn: document.querySelector("#closeConfirmBtn"),
   cancelConfirmBtn: document.querySelector("#cancelConfirmBtn"),
-  departureTime: document.querySelector("#departureTime"),
-  arrivalTime: document.querySelector("#arrivalTime"),
+  airlineName: document.querySelector("#airlineName"),
+  flightNumber: document.querySelector("#flightNumber"),
+  departureAt: document.querySelector("#departureAt"),
+  arrivalAt: document.querySelector("#arrivalAt"),
   departureCode: document.querySelector("#departureCode"),
-  arrivalCode: document.querySelector("#arrivalCode")
+  arrivalCode: document.querySelector("#arrivalCode"),
+  terminalValue: document.querySelector("#terminalValue"),
+  gateValue: document.querySelector("#gateValue"),
+  seatValue: document.querySelector("#seatValue")
 };
 
 function escapeHtml(value) {
@@ -98,10 +108,15 @@ function serverCard(server) {
 }
 
 function renderFlightBoard() {
-  els.departureTime.textContent = flight.departureTime;
-  els.arrivalTime.textContent = flight.arrivalTime;
+  els.airlineName.textContent = flight.airlineName;
+  els.flightNumber.textContent = flight.flightNumber;
+  els.departureAt.textContent = flight.departureAt;
+  els.arrivalAt.textContent = flight.arrivalAt;
   els.departureCode.textContent = flight.departureCode;
   els.arrivalCode.textContent = flight.arrivalCode;
+  els.terminalValue.textContent = flight.terminal;
+  els.gateValue.textContent = flight.gate;
+  els.seatValue.textContent = flight.seat;
 }
 
 function render() {
