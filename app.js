@@ -1,63 +1,14 @@
-const API_BASE = "";
+const API_BASE = (window.TRIPON_ADMIN_API_BASE || "").replace(/\/$/, "");
 const REFRESH_MS = 10000;
-
-const demoServers = [
-  {
-    id: "pc1",
-    name: "PC 1 · Legion",
-    subtitle: "Gaming / backup AI server",
-    batteryPercent: 76,
-    acConnected: true,
-    charging: true,
-    estimatedRuntimeMin: 145,
-    online: true,
-    cpu: 42,
-    ramUsedGb: 14.2,
-    ramTotalGb: 32,
-    gpu: 27,
-    vramUsedGb: 3.4,
-    vramTotalGb: 8,
-    gpuTempC: 63,
-    ollama: true,
-    qwen: true,
-    tunnel: true,
-    draining: false,
-    activeRequests: 1,
-    latencyMs: 1800,
-    lastSeen: new Date().toISOString()
-  },
-  {
-    id: "pc2",
-    name: "PC 2 · AI Server",
-    subtitle: "Primary AI server",
-    batteryPercent: null,
-    acConnected: null,
-    charging: null,
-    estimatedRuntimeMin: null,
-    online: true,
-    cpu: 19,
-    ramUsedGb: 11.4,
-    ramTotalGb: 32,
-    gpu: null,
-    vramUsedGb: null,
-    vramTotalGb: null,
-    gpuTempC: null,
-    ollama: true,
-    qwen: true,
-    tunnel: true,
-    draining: false,
-    activeRequests: 0,
-    latencyMs: 2400,
-    lastSeen: new Date().toISOString()
-  }
-];
-
-let servers = structuredClone(demoServers);
-let usingDemo = true;
+let servers = [];
 let pendingAction = null;
 let timer = null;
 
 const els = {
+  loginView: document.querySelector("#loginView"),
+  dashboardView: document.querySelector("#dashboardView"),
+  loginForm: document.querySelector("#loginForm"),
+  loginError: document.querySelector("#loginError"),
   grid: document.querySelector("#serverGrid"),
   onlineCount: document.querySelector("#onlineCount"),
   activeRequests: document.querySelector("#activeRequests"),
@@ -65,19 +16,22 @@ const els = {
   routingStatus: document.querySelector("#routingStatus"),
   modeBadge: document.querySelector("#modeBadge"),
   refreshBtn: document.querySelector("#refreshBtn"),
+  logoutBtn: document.querySelector("#logoutBtn"),
   activityList: document.querySelector("#activityList"),
   activityEmpty: document.querySelector("#activityEmpty"),
-  authDialog: document.querySelector("#authDialog"),
-  authForm: document.querySelector("#authForm"),
-  authTitle: document.querySelector("#authTitle"),
-  authText: document.querySelector("#authText"),
-  passwordInput: document.querySelector("#passwordInput"),
+  confirmDialog: document.querySelector("#confirmDialog"),
+  confirmForm: document.querySelector("#confirmForm"),
+  confirmTitle: document.querySelector("#confirmTitle"),
+  confirmText: document.querySelector("#confirmText"),
   dangerConfirm: document.querySelector("#dangerConfirm"),
-  confirmLabel: document.querySelector("#confirmLabel"),
-  authError: document.querySelector("#authError"),
-  closeAuthBtn: document.querySelector("#closeAuthBtn"),
-  cancelAuthBtn: document.querySelector("#cancelAuthBtn")
+  confirmError: document.querySelector("#confirmError"),
+  closeConfirmBtn: document.querySelector("#closeConfirmBtn"),
+  cancelConfirmBtn: document.querySelector("#cancelConfirmBtn")
 };
+
+function escapeHtml(value) {
+  return String(value ?? "").replace(/[&<>"]/g, char => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[char]));
+}
 
 function pct(value, total) {
   if (!Number.isFinite(value) || !Number.isFinite(total) || total <= 0) return 0;
@@ -85,270 +39,149 @@ function pct(value, total) {
 }
 
 function formatLastSeen(value) {
-  if (!value) return "—";
-  const d = new Date(value);
-  if (Number.isNaN(d.getTime())) return "—";
-  return d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" });
-}
-
-function statusBadge(ok, textTrue = "Running", textFalse = "Stopped") {
-  return '<strong>' + (ok ? textTrue : textFalse) + '</strong>';
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? "—" : date.toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit", second: "2-digit" });
 }
 
 function metric(label, value, display) {
   const safe = Number.isFinite(value) ? Math.max(0, Math.min(100, value)) : 0;
-  return `
-    <div class="metric-row">
-      <span class="metric-label">${label}</span>
-      <div class="bar" aria-hidden="true"><i style="width:${safe}%"></i></div>
-      <span class="metric-value">${display}</span>
-    </div>
-  `;
+  return '<div class="metric-row"><span class="metric-label">' + escapeHtml(label) + '</span><div class="bar" aria-hidden="true"><i style="width:' + safe + '%"></i></div><span class="metric-value">' + escapeHtml(display) + '</span></div>';
+}
+
+function statusBadge(ok, trueText = "정상", falseText = "중지") {
+  return '<strong>' + (ok ? trueText : falseText) + '</strong>';
+}
+
+function serverCard(server) {
+  const ramPct = pct(server.ramUsedGb, server.ramTotalGb);
+  const vramPct = pct(server.vramUsedGb, server.vramTotalGb);
+  const statusClass = server.online ? (server.draining ? "warn" : "online") : "offline";
+  const statusText = !server.online ? "오프라인" : server.draining ? "대기" : "온라인";
+  const modelRunning = Boolean(server.gemma ?? server.qwen);
+  const vram = Number.isFinite(server.vramUsedGb) && Number.isFinite(server.vramTotalGb) ? server.vramUsedGb.toFixed(1) + " / " + server.vramTotalGb + " GB" : "N/A";
+  const actions = [
+    ["restart_gateway", "게이트웨이 재시작"],
+    ["restart_tunnel", "터널 재시작"],
+    [server.draining ? "resume" : "drain", server.draining ? "요청 재개" : "요청 중지"],
+    ["restart_pc", "PC 재시작"],
+    ["shutdown", "PC 종료"]
+  ];
+  return '<article class="server-card ' + (server.online ? "" : "offline-card") + '">' +
+    '<div class="server-card-head"><div class="server-name"><strong>' + escapeHtml(server.name) + '</strong><span>' + escapeHtml(server.subtitle || server.id) + '</span></div><span class="badge ' + statusClass + '">' + statusText + '</span></div>' +
+    '<div class="metrics">' +
+      metric("CPU", server.cpu, Number.isFinite(server.cpu) ? server.cpu + "%" : "N/A") +
+      metric("RAM", ramPct, Number.isFinite(server.ramUsedGb) ? server.ramUsedGb.toFixed(1) + " / " + server.ramTotalGb + " GB" : "N/A") +
+      metric("GPU", server.gpu, Number.isFinite(server.gpu) ? server.gpu + "%" : "N/A") +
+      metric("VRAM", vramPct, vram) +
+    '</div>' +
+    '<div class="status-grid">' +
+      '<div class="status-item"><span>Gemma 3</span>' + statusBadge(modelRunning) + '</div>' +
+      '<div class="status-item"><span>Ollama</span>' + statusBadge(server.ollama) + '</div>' +
+      '<div class="status-item"><span>터널</span>' + statusBadge(server.tunnel, "연결됨", "연결 안 됨") + '</div>' +
+      '<div class="status-item"><span>GPU 온도</span><strong>' + (Number.isFinite(server.gpuTempC) ? server.gpuTempC + "°C" : "N/A") + '</strong></div>' +
+      '<div class="status-item"><span>진행 중 요청</span><strong>' + (server.activeRequests ?? 0) + '</strong></div>' +
+      '<div class="status-item"><span>응답 시간</span><strong>' + (Number.isFinite(server.latencyMs) ? server.latencyMs + " ms" : "—") + '</strong></div>' +
+    '</div>' +
+    '<div class="server-meta"><div><span>마지막 확인</span><strong>' + formatLastSeen(server.lastSeen) + '</strong></div><div><span>역할</span><strong>' + escapeHtml(server.role || "AI 서버") + '</strong></div><div><span>요청 상태</span><strong>' + (server.draining ? "중지됨" : server.online ? "수신 중" : "사용 불가") + '</strong></div></div>' +
+    '<div class="controls">' + actions.map(([action, label]) => '<button class="btn ' + (["restart_pc", "shutdown"].includes(action) ? "ghost-danger" : "secondary") + ' control-btn" data-server="' + escapeHtml(server.id) + '" data-action="' + action + '">' + label + '</button>').join("") + '</div></article>';
 }
 
 function render() {
-  const online = servers.filter(s => s.online);
-  const active = servers.reduce((sum, s) => sum + (s.activeRequests || 0), 0);
-  const latencies = online.map(s => s.latencyMs).filter(Number.isFinite);
-  const avgLatency = latencies.length ? Math.round(latencies.reduce((a,b) => a+b, 0) / latencies.length) : null;
-
-  els.onlineCount.textContent = `${online.length} / ${servers.length}`;
+  const online = servers.filter(server => server.online);
+  const active = servers.reduce((sum, server) => sum + (Number(server.activeRequests) || 0), 0);
+  const latencies = online.map(server => server.latencyMs).filter(Number.isFinite);
+  const average = latencies.length ? Math.round(latencies.reduce((a, b) => a + b, 0) / latencies.length) : null;
+  els.onlineCount.textContent = online.length + " / " + servers.length;
   els.activeRequests.textContent = String(active);
-  els.avgLatency.textContent = avgLatency ? `${avgLatency} ms` : "—";
-  els.routingStatus.textContent = online.length >= 2 ? "Redundant" : online.length === 1 ? "Failover only" : "Offline";
-
-  els.modeBadge.textContent = usingDemo ? "DEMO MODE" : "LIVE";
-  els.modeBadge.className = "badge " + (usingDemo ? "neutral" : "online");
-
-  els.grid.innerHTML = servers.map(serverCard).join("");
-  bindControlButtons();
-}
-
-function serverCard(s) {
-  const ramPct = pct(s.ramUsedGb, s.ramTotalGb);
-  const vramPct = pct(s.vramUsedGb, s.vramTotalGb);
-  const statusClass = s.online ? (s.draining ? "warn" : "online") : "offline";
-  const statusText = !s.online ? "OFFLINE" : s.draining ? "DRAINING" : "ONLINE";
-  const gpuDisplay = Number.isFinite(s.gpu) ? `${s.gpu}%` : "N/A";
-  const vramDisplay = Number.isFinite(s.vramUsedGb) && Number.isFinite(s.vramTotalGb)
-    ? `${s.vramUsedGb.toFixed(1)} / ${s.vramTotalGb} GB`
-    : "N/A";
-  const tempDisplay = Number.isFinite(s.gpuTempC) ? `${s.gpuTempC}°C` : "N/A";
-  const batteryDisplay = Number.isFinite(s.batteryPercent) ? `${Math.round(s.batteryPercent)}%` : "N/A";
-  const powerDisplay = s.acConnected === true ? "AC Connected" : s.acConnected === false ? "Battery" : "N/A";
-  const chargingDisplay = s.charging === true ? "Charging" : s.charging === false && Number.isFinite(s.batteryPercent) ? "Not charging" : "N/A";
-  const runtimeDisplay = Number.isFinite(s.estimatedRuntimeMin)
-    ? `${Math.floor(s.estimatedRuntimeMin / 60)}h ${Math.round(s.estimatedRuntimeMin % 60)}m`
-    : "N/A";
-
-  return `
-    <article class="server-card ${s.online ? "" : "offline-card"}">
-      <div class="server-card-head">
-        <div class="server-name">
-          <strong>${s.name}</strong>
-          <span>${s.subtitle || s.id}</span>
-        </div>
-        <span class="badge ${statusClass}">${statusText}</span>
-      </div>
-
-      <div class="metrics">
-        ${metric("CPU", s.cpu, Number.isFinite(s.cpu) ? s.cpu + "%" : "N/A")}
-        ${metric("RAM", ramPct, Number.isFinite(s.ramUsedGb) ? s.ramUsedGb.toFixed(1) + " / " + s.ramTotalGb + " GB" : "N/A")}
-        ${metric("GPU", s.gpu, gpuDisplay)}
-        ${metric("VRAM", vramPct, vramDisplay)}
-      </div>
-
-      <div class="status-grid">
-        <div class="status-item"><span>Qwen</span>${statusBadge(s.qwen)}</div>
-        <div class="status-item"><span>Ollama</span>${statusBadge(s.ollama)}</div>
-        <div class="status-item"><span>Tunnel</span>${statusBadge(s.tunnel, "Connected", "Disconnected")}</div>
-        <div class="status-item"><span>GPU temp</span><strong>${tempDisplay}</strong></div>
-        <div class="status-item"><span>Battery</span><strong>${batteryDisplay}</strong></div>
-        <div class="status-item"><span>Power</span><strong>${powerDisplay}</strong></div>
-        <div class="status-item"><span>Charging</span><strong>${chargingDisplay}</strong></div>
-        <div class="status-item"><span>Battery runtime</span><strong>${runtimeDisplay}</strong></div>
-        <div class="status-item"><span>Requests</span><strong>${s.activeRequests ?? 0}</strong></div>
-        <div class="status-item"><span>Latency</span><strong>${Number.isFinite(s.latencyMs) ? s.latencyMs + " ms" : "—"}</strong></div>
-      </div>
-
-      <div class="server-meta">
-        <div><span>Last seen</span><strong>${formatLastSeen(s.lastSeen)}</strong></div>
-        <div><span>Role</span><strong>${s.id === "pc2" ? "Primary" : "Backup"}</strong></div>
-        <div><span>Routing</span><strong>${s.draining ? "Paused" : s.online ? "Accepting" : "Unavailable"}</strong></div>
-      </div>
-
-      <div class="controls">
-        <button class="btn secondary control-btn" data-server="${s.id}" data-action="restart_qwen">Restart Qwen</button>
-        <button class="btn secondary control-btn" data-server="${s.id}" data-action="restart_tunnel">Restart Tunnel</button>
-        <button class="btn secondary control-btn" data-server="${s.id}" data-action="${s.draining ? "resume" : "drain"}">${s.draining ? "Resume" : "Drain"}</button>
-        <button class="btn ghost-danger control-btn" data-server="${s.id}" data-action="restart_pc">Restart PC</button>
-        <button class="btn ghost-danger control-btn" data-server="${s.id}" data-action="shutdown">Shutdown</button>
-      </div>
-    </article>
-  `;
-}
-
-function bindControlButtons() {
-  document.querySelectorAll(".control-btn").forEach(btn => {
-    btn.addEventListener("click", () => {
-      const serverId = btn.dataset.server;
-      const action = btn.dataset.action;
-      const protectedAction = ["restart_pc", "shutdown"].includes(action);
-
-      if (protectedAction) {
-        openAuth(serverId, action);
-      } else {
-        sendControl(serverId, action, null);
-      }
-    });
-  });
-}
-
-function openAuth(serverId, action) {
-  const server = servers.find(s => s.id === serverId);
-  pendingAction = { serverId, action };
-  els.passwordInput.value = "";
-  els.dangerConfirm.checked = false;
-  els.authError.textContent = "";
-
-  const isShutdown = action === "shutdown";
-  els.authTitle.textContent = isShutdown ? "Shutdown PC" : "Restart PC";
-  els.authText.textContent = `${server?.name || serverId} will ${isShutdown ? "shut down" : "restart"}. AI service may be temporarily unavailable.`;
-  els.confirmLabel.style.display = "flex";
-  els.authDialog.showModal();
-  els.passwordInput.focus();
-}
-
-async function sendControl(serverId, action, password) {
-  const label = action.replaceAll("_", " ");
-  addActivity(serverId, label, "Pending");
-
-  if (usingDemo) {
-    applyDemoAction(serverId, action);
-    updateLatestActivity("Done");
-    return;
-  }
-
-  try {
-    const res = await fetch(API_BASE + "/api/control", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ serverId, action, password })
-    });
-
-    if (!res.ok) throw new Error("Control request failed");
-    updateLatestActivity("Done");
-    await loadServers();
-  } catch (err) {
-    updateLatestActivity("Failed");
-    alert("Command failed: " + err.message);
-  }
-}
-
-function applyDemoAction(serverId, action) {
-  const s = servers.find(x => x.id === serverId);
-  if (!s) return;
-
-  if (action === "drain") s.draining = true;
-  if (action === "resume") s.draining = false;
-
-  if (action === "restart_qwen") {
-    s.qwen = false;
-    render();
-    setTimeout(() => { s.qwen = true; s.lastSeen = new Date().toISOString(); render(); }, 1200);
-  }
-
-  if (action === "restart_tunnel") {
-    s.tunnel = false;
-    render();
-    setTimeout(() => { s.tunnel = true; s.lastSeen = new Date().toISOString(); render(); }, 1200);
-  }
-
-  if (action === "restart_pc") {
-    s.online = false;
-    s.qwen = false;
-    s.ollama = false;
-    s.tunnel = false;
-    render();
-    setTimeout(() => {
-      s.online = true;
-      s.qwen = true;
-      s.ollama = true;
-      s.tunnel = true;
-      s.lastSeen = new Date().toISOString();
-      render();
-    }, 2500);
-  }
-
-  if (action === "shutdown") {
-    s.online = false;
-    s.qwen = false;
-    s.ollama = false;
-    s.tunnel = false;
-    s.activeRequests = 0;
-  }
-
-  render();
+  els.avgLatency.textContent = average ? average + " ms" : "—";
+  els.routingStatus.textContent = online.length ? "정상" : "오프라인";
+  els.modeBadge.textContent = "연결됨";
+  els.modeBadge.className = "badge online";
+  els.grid.innerHTML = servers.length ? servers.map(serverCard).join("") : '<div class="empty">등록된 AI 서버가 없습니다.</div>';
+  document.querySelectorAll(".control-btn").forEach(button => button.addEventListener("click", () => openConfirm(button.dataset.server, button.dataset.action)));
 }
 
 function addActivity(serverId, action, status) {
   els.activityEmpty.style.display = "none";
-  const li = document.createElement("li");
-  li.dataset.latest = "true";
-  li.innerHTML = `
-    <span class="activity-time">${new Date().toLocaleTimeString()}</span>
-    <strong>${serverId.toUpperCase()} · ${action}</strong>
-    <span class="activity-status">${status}</span>
-  `;
-  els.activityList.prepend(li);
+  const item = document.createElement("li");
+  item.innerHTML = '<span class="activity-time">' + new Date().toLocaleTimeString("ko-KR") + '</span><strong>' + escapeHtml(serverId) + " · " + escapeHtml(action) + '</strong><span class="activity-status">' + escapeHtml(status) + "</span>";
+  els.activityList.prepend(item);
 }
 
-function updateLatestActivity(status) {
-  const latest = els.activityList.querySelector("li");
-  if (!latest) return;
-  const node = latest.querySelector(".activity-status");
-  if (node) node.textContent = status;
+async function api(path, options = {}) {
+  const response = await fetch(API_BASE + path, { credentials: "include", ...options });
+  if (response.status === 401) throw new Error("AUTH_REQUIRED");
+  if (!response.ok) throw new Error("REQUEST_FAILED");
+  return response.status === 204 ? null : response.json();
 }
 
 async function loadServers() {
   try {
-    const res = await fetch(API_BASE + "/api/servers", { cache: "no-store" });
-    if (!res.ok) throw new Error("API unavailable");
-    const data = await res.json();
-    if (!Array.isArray(data.servers)) throw new Error("Invalid payload");
+    const data = await api("/api/servers", { cache: "no-store" });
+    if (!Array.isArray(data.servers)) throw new Error("REQUEST_FAILED");
     servers = data.servers;
-    usingDemo = false;
-  } catch {
-    usingDemo = true;
-    servers.forEach(s => { if (s.online) s.lastSeen = new Date().toISOString(); });
+    render();
+  } catch (error) {
+    if (error.message === "AUTH_REQUIRED") return showLogin();
+    els.modeBadge.textContent = "연결 오류";
+    els.modeBadge.className = "badge offline";
+    els.grid.innerHTML = '<div class="empty">서버 상태를 불러오지 못했습니다. 연결을 확인해 주세요.</div>';
   }
-  render();
 }
 
-els.refreshBtn.addEventListener("click", loadServers);
-els.closeAuthBtn.addEventListener("click", () => els.authDialog.close());
-els.cancelAuthBtn.addEventListener("click", () => els.authDialog.close());
+function showDashboard() {
+  els.loginView.hidden = true;
+  els.dashboardView.hidden = false;
+  loadServers();
+  timer = setInterval(loadServers, REFRESH_MS);
+}
 
-els.authForm.addEventListener("submit", async event => {
+function showLogin() {
+  clearInterval(timer);
+  els.dashboardView.hidden = true;
+  els.loginView.hidden = false;
+}
+
+function openConfirm(serverId, action) {
+  const dangerous = ["restart_pc", "shutdown"].includes(action);
+  pendingAction = { serverId, action };
+  els.dangerConfirm.checked = false;
+  els.confirmError.textContent = "";
+  els.confirmTitle.textContent = dangerous ? "위험한 명령 확인" : "명령 확인";
+  els.confirmText.textContent = dangerous ? "실행하면 AI 서비스가 일시 중단될 수 있습니다." : "선택한 서버에 관리 명령을 보냅니다.";
+  document.querySelector("#confirmLabel").style.display = dangerous ? "flex" : "none";
+  els.confirmDialog.showModal();
+}
+
+async function sendControl(serverId, action) {
+  addActivity(serverId, action.replaceAll("_", " "), "실행 중");
+  try {
+    await api("/api/control", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ serverId, action }) });
+    els.activityList.firstElementChild.querySelector(".activity-status").textContent = "완료";
+    await loadServers();
+  } catch (error) {
+    els.activityList.firstElementChild.querySelector(".activity-status").textContent = "실패";
+    if (error.message === "AUTH_REQUIRED") showLogin();
+  }
+}
+
+els.loginForm.addEventListener("submit", async event => {
   event.preventDefault();
-  if (!pendingAction) return;
-
-  if (!els.passwordInput.value) {
-    els.authError.textContent = "Enter the control password.";
-    return;
+  els.loginError.textContent = "";
+  const form = new FormData(els.loginForm);
+  try {
+    await api("/api/admin/login", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id: form.get("id"), password: form.get("password") }) });
+    els.loginForm.reset();
+    showDashboard();
+  } catch {
+    els.loginError.textContent = "관리자 ID 또는 비밀번호를 확인해 주세요.";
   }
-  if (!els.dangerConfirm.checked) {
-    els.authError.textContent = "Confirm that you understand the interruption risk.";
-    return;
-  }
-
-  const { serverId, action } = pendingAction;
-  const password = els.passwordInput.value;
-  els.authDialog.close();
-  pendingAction = null;
-  await sendControl(serverId, action, password);
 });
+els.logoutBtn.addEventListener("click", async () => { try { await api("/api/admin/logout", { method: "POST" }); } finally { showLogin(); } });
+els.refreshBtn.addEventListener("click", loadServers);
+els.closeConfirmBtn.addEventListener("click", () => els.confirmDialog.close());
+els.cancelConfirmBtn.addEventListener("click", () => els.confirmDialog.close());
+els.confirmForm.addEventListener("submit", async event => { event.preventDefault(); if (!pendingAction) return; const dangerous = ["restart_pc", "shutdown"].includes(pendingAction.action); if (dangerous && !els.dangerConfirm.checked) { els.confirmError.textContent = "서비스 중단 가능성을 확인해 주세요."; return; } const action = pendingAction; pendingAction = null; els.confirmDialog.close(); await sendControl(action.serverId, action.action); });
 
-loadServers();
-timer = setInterval(loadServers, REFRESH_MS);
+api("/api/admin/session", { cache: "no-store" }).then(showDashboard).catch(showLogin);
 window.addEventListener("beforeunload", () => clearInterval(timer));
