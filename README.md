@@ -67,3 +67,31 @@ GitHub Pages는 정적 파일만 제공하므로 **관리자 ID와 비밀번호�
 ```
 
 이 값에는 비밀번호, Gateway 토큰, Ollama 주소를 넣지 않습니다.
+
+## 관리자 API 배포
+
+`worker/`는 GitHub Pages 대시보드의 세션 인증과 게이트웨이 프록시를 담당합니다. Worker 디렉터리에서 아래 Secret을 설정한 뒤 배포합니다.
+
+```text
+ADMIN_ID
+ADMIN_PASSWORD
+SESSION_SECRET
+ADMIN_STATUS_URL
+ADMIN_STATUS_TOKEN
+ADMIN_CONTROL_URL
+```
+
+`ADMIN_ID`는 지정한 관리자 ID이고, `ADMIN_PASSWORD`는 관리자 비밀번호입니다. 실제 값은 `wrangler secret put` 또는 Cloudflare 대시보드의 Secret 관리 화면에만 입력합니다. GitHub 파일, 커밋, Actions 로그에는 절대 넣지 않습니다.
+
+```bash
+cd worker
+npm install
+wrangler secret put ADMIN_ID
+wrangler secret put ADMIN_PASSWORD
+wrangler secret put SESSION_SECRET
+wrangler secret put ADMIN_STATUS_URL
+wrangler secret put ADMIN_STATUS_TOKEN
+wrangler deploy
+```
+
+배포된 Worker URL을 Pages에 연결하거나 `TRIPON_ADMIN_API_BASE`로 주입하면, 대시보드는 로그인 전에는 어떤 상태·제어 정보도 표시하지 않습니다.
