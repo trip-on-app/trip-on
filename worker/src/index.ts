@@ -79,7 +79,10 @@ async function proxyStatus(env: Env, cors: Headers): Promise<Response> {
     headers: { "X-TripOn-Gateway-Token": env.ADMIN_STATUS_TOKEN },
     signal: AbortSignal.timeout(10_000),
   });
-  if (!upstream.ok) return json({ error: "UPSTREAM_UNAVAILABLE" }, 503, cors);
+  if (!upstream.ok) {
+    console.error("ADMIN_STATUS_UPSTREAM_ERROR", upstream.status);
+    return json({ error: "UPSTREAM_UNAVAILABLE", upstreamStatus: upstream.status }, 503, cors);
+  }
   const payload = await upstream.json<unknown>();
   return json(payload, 200, cors);
 }
