@@ -1,5 +1,5 @@
 // Public deployment configuration only. This URL contains no credentials.
-window.TRIPON_ADMIN_API_BASE = "";
+window.TRIPON_ADMIN_API_BASE = "https://trip-on-ai-admin.trip-on-official-dev.workers.dev";
 
 // Display-only flight card metadata. It is not live flight data.
 window.TRIPON_DASHBOARD_FLIGHT = {
