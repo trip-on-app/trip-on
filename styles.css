@@ -386,3 +386,74 @@ h3 { margin-bottom: 6px; }
   .flight-detail-meta strong { font-size: 13px; }
   .dashboard-actions { justify-content: space-between; }
 }
+
+/* Korean travel checklist */
+.travel-checklist {
+  max-width: 680px;
+  margin: 0 auto 30px;
+}
+.checklist-heading {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+.checklist-heading h2 {
+  margin: 0;
+  color: #202c42;
+  font-size: 24px;
+  letter-spacing: -.04em;
+}
+.checklist-heading strong {
+  color: #647694;
+  font-size: 16px;
+}
+.checklist-items { display: grid; gap: 12px; }
+.checklist-item {
+  display: grid;
+  grid-template-columns: 54px 1fr 24px;
+  align-items: center;
+  min-height: 92px;
+  padding: 16px 22px;
+  border: 1px solid #e3eaf3;
+  border-radius: 24px;
+  background: #fff;
+}
+.checklist-item > strong {
+  color: #202c42;
+  font-size: 20px;
+  font-weight: 650;
+}
+.check-icon {
+  display: inline-grid;
+  width: 42px;
+  height: 42px;
+  place-items: center;
+  border-radius: 12px;
+  font-size: 25px;
+  font-weight: 700;
+}
+.check-icon.done { color: #1ecb69; background: #e5f8ed; }
+.check-icon.document { color: #697b97; background: #f0f4f8; font-size: 22px; }
+.check-arrow { color: #94a5bd; font-size: 38px; font-weight: 300; line-height: 1; text-align: right; }
+.checklist-add {
+  width: 100%;
+  margin-top: 18px;
+  padding: 15px;
+  border: 1px solid #d7e1ee;
+  border-radius: 999px;
+  color: #202c42;
+  background: transparent;
+  font-size: 18px;
+  font-weight: 750;
+  cursor: pointer;
+}
+.checklist-add span { margin-right: 8px; font-size: 24px; vertical-align: -1px; }
+@media (max-width: 620px) {
+  .checklist-heading h2 { font-size: 22px; }
+  .checklist-heading strong { font-size: 15px; }
+  .checklist-item { min-height: 78px; padding: 13px 18px; border-radius: 20px; }
+  .checklist-item > strong { font-size: 18px; }
+  .check-icon { width: 40px; height: 40px; }
+}
