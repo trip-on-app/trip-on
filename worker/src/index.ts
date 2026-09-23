@@ -46,7 +46,10 @@ async function sessionIsValid(request: Request, env: Env): Promise<boolean> {
   const [expiresAt, signature] = token.split(".");
   if (!expiresAt || !signature || !/^\d+$/.test(expiresAt) || Number(expiresAt) < Date.now()) return false;
   const expected = await hmac(expiresAt, env.SESSION_SECRET);
-  if (signature.length !== expected.length) return false;\n  let difference = 0;\n  for (let index = 0; index < signature.length; index++) difference |= signature.charCodeAt(index) ^ expected.charCodeAt(index);\n  return difference === 0;
+  if (signature.length !== expected.length) return false;
+  let difference = 0;
+  for (let index = 0; index < signature.length; index++) difference |= signature.charCodeAt(index) ^ expected.charCodeAt(index);
+  return difference === 0;
 }
 
 function sessionCookie(value: string, maxAge: number): string {
