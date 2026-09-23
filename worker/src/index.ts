@@ -5,19 +5,30 @@ export interface Env {
   ADMIN_STATUS_URL: string;
   ADMIN_STATUS_TOKEN: string;
   ADMIN_CONTROL_URL?: string;
+  DASHBOARD_ORIGIN: string;
 }
 
 const sessionMaxAgeSeconds = 60 * 60 * 8;
 
 function json(data: unknown, status = 200, headers: HeadersInit = {}): Response {
-  return Response.json(data, {
-    status,
-    headers: {
-      "cache-control": "no-store",
-      "x-content-type-options": "nosniff",
-      ...headers,
-    },
+  const output = new Headers({
+    "cache-control": "no-store",
+    "x-content-type-options": "nosniff",
   });
+  new Headers(headers).forEach((value, name) => output.set(name, value));
+  return Response.json(data, { status, headers: output });
+}
+
+function corsHeaders(request: Request, env: Env): Headers {
+  const origin = request.headers.get("origin");
+  const headers = new Headers({ "vary": "Origin" });
+  if (origin === env.DASHBOARD_ORIGIN) {
+    headers.set("access-control-allow-origin", origin);
+    headers.set("access-control-allow-credentials", "true");
+    headers.set("access-control-allow-headers", "content-type");
+    headers.set("access-control-allow-methods", "GET, POST, OPTIONS");
+  }
+  return headers;
 }
 
 function cookie(request: Request, name: string): string | null {
@@ -56,8 +67,8 @@ function sessionCookie(value: string, maxAge: number): string {
   return "tripon_admin_session=" + value + "; HttpOnly; Secure; SameSite=Strict; Path=/; Max-Age=" + maxAge;
 }
 
-async function requireAdmin(request: Request, env: Env): Promise<Response | null> {
-  return await sessionIsValid(request, env) ? null : json({ error: "AUTH_REQUIRED" }, 401);
+async function requireAdmin(request: Request, env: Env, cors: Headers): Promise<Response | null> {
+  return await sessionIsValid(request, env) ? null : json({ error: "AUTH_REQUIRED" }, 401, cors);
 }
 
 async function proxyStatus(env: Env): Promise<Response> {
@@ -73,13 +84,7 @@ async function proxyStatus(env: Env): Promise<Response> {
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     const url = new URL(request.url);
-    const cors = new Headers({
-      "access-control-allow-origin": url.origin,
-      "access-control-allow-credentials": "true",
-      "access-control-allow-headers": "content-type",
-      "access-control-allow-methods": "GET, POST, OPTIONS",
-      "vary": "Origin",
-    });
+    const cors = corsHeaders(request, env);
     if (request.method === "OPTIONS") return new Response(null, { status: 204, headers: cors });
 
     if (request.method === "POST" && url.pathname === "/api/admin/login") {
@@ -93,7 +98,7 @@ export default {
     }
 
     if (request.method === "GET" && url.pathname === "/api/admin/session") {
-      const denied = await requireAdmin(request, env);
+      const denied = await requireAdmin(request, env, cors);
       return denied ?? json({ ok: true }, 200, cors);
     }
 
@@ -101,7 +106,7 @@ export default {
       return json({ ok: true }, 200, new Headers([...cors, ["set-cookie", sessionCookie("", 0)]]));
     }
 
-    const denied = await requireAdmin(request, env);
+    const denied = await requireAdmin(request, env, cors);
     if (denied) return denied;
 
     if (request.method === "GET" && url.pathname === "/api/servers") {
