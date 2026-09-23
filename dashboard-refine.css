@@ -1,0 +1,35 @@
+/* Compact desktop density for the administrator workspace. */
+.brand-mark {
+  background: #fff url('TripON_logo_blue.png') center / cover no-repeat;
+  color: transparent;
+  border-radius: 9px;
+}
+
+.sidebar { padding: 22px 14px; }
+.brand { padding-bottom: 27px; }
+.nav { padding: 9px 11px; font-size: 14px; }
+.nav i { font-size: 16px; }
+.main { padding: 30px; }
+.top { margin-bottom: 25px; }
+.section-head { margin-bottom: 13px; }
+.server { padding: 17px; }
+.server-top { align-items: flex-start; }
+.server h3 { font-size: 16px; }
+.server p { margin-top: 3px; }
+.server .badge { padding: 4px 7px; font-size: 11px; line-height: 1.3; white-space: nowrap; }
+.server .badge i { width: 6px; height: 6px; margin-right: 4px; }
+.server-metrics { gap: 7px; margin: 14px 0; }
+.metric { padding: 9px; }
+.server-actions .button, .server-actions .danger { padding: 9px 12px; }
+.period-grid { gap: 8px; margin-top: 13px; }
+.period { padding: 11px; }
+
+@media (min-width: 721px) and (max-width: 900px) {
+  .shell { grid-template-columns: 196px minmax(0, 1fr); }
+  .sidebar { display: flex; flex-direction: column; align-items: stretch; overflow: visible; }
+  .brand { padding: 0 10px 25px; }
+  .sidebar-foot { display: block; }
+  .main { padding: 24px; }
+  .stat-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .overview-grid, .server-grid { grid-template-columns: 1fr; }
+}
