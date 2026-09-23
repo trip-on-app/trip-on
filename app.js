@@ -1,6 +1,6 @@
 const API=(window.TRIPON_ADMIN_API_BASE||'').replace(/\/$/,''),KEY='tripon_admin_session_token',$=s=>document.querySelector(s);
 let editingPromotion=null,pendingCommand=null,promotions=[];
-const pcs=[{id:'pc-1',name:'AI PC 01',role:'Gemma 주 처리',cpu:32,gpu:48,ram:56,temp:62,last:'방금 전',daily:1240,weekly:1310,monthly:1380},{id:'pc-2',name:'AI PC 02',role:'분산 처리·대기',cpu:18,gpu:29,ram:41,temp:55,last:'2분 전',daily:1170,weekly:1230,monthly:1295}];
+const pcs=[{id:'pc-1',name:'AI PC 01',role:'Gemma 주 처리',cpu:32,gpu:48,ram:56,temp:62,last:'방금 전',daily:1240,weekly:1310,monthly:1380},{id:'pc-2',name:'AI PC 02 · 엄지욱',role:'이 PC · Ryzen 7 PRO 7840U · Radeon 780M · 30.7GB RAM',cpu:100,gpu:0,ram:92,temp:'—',last:'이 PC에서 방금 확인',daily:1170,weekly:1230,monthly:1295}];
 const esc=v=>String(v??'').replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
 async function api(path,options={}){const headers=new Headers(options.headers||{}),token=sessionStorage.getItem(KEY);if(token)headers.set('Authorization','Bearer '+token);const response=await fetch(API+path,{...options,headers,credentials:'include'});if(response.status===401)throw Error('AUTH');if(!response.ok){const payload=await response.json().catch(()=>({}));throw Error(payload.error||'REQUEST_FAILED')}return response.status===204?null:response.json()}
 function table(headers,rows){return '<table class="table"><thead><tr>'+headers.map(h=>'<th>'+h+'</th>').join('')+'</tr></thead><tbody>'+rows+'</tbody></table>'}
