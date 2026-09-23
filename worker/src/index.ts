@@ -25,7 +25,7 @@ function corsHeaders(request: Request, env: Env): Headers {
   if (origin === env.DASHBOARD_ORIGIN) {
     headers.set("access-control-allow-origin", origin);
     headers.set("access-control-allow-credentials", "true");
-    headers.set("access-control-allow-headers", "content-type");
+    headers.set("access-control-allow-headers", "authorization, content-type");
     headers.set("access-control-allow-methods", "GET, POST, OPTIONS");
   }
   return headers;
@@ -52,7 +52,9 @@ async function hmac(value: string, secret: string): Promise<string> {
 }
 
 async function sessionIsValid(request: Request, env: Env): Promise<boolean> {
-  const token = cookie(request, "tripon_admin_session");
+  const authorization = request.headers.get("authorization");
+  const bearer = authorization?.startsWith("Bearer ") ? authorization.slice("Bearer ".length) : null;
+  const token = bearer ?? cookie(request, "tripon_admin_session");
   if (!token) return false;
   const [expiresAt, signature] = token.split(".");
   if (!expiresAt || !signature || !/^\d+$/.test(expiresAt) || Number(expiresAt) < Date.now()) return false;
@@ -94,7 +96,7 @@ export default {
       if (id !== env.ADMIN_ID || password !== env.ADMIN_PASSWORD) return json({ error: "INVALID_CREDENTIALS" }, 401, cors);
       const expiresAt = String(Date.now() + sessionMaxAgeSeconds * 1000);
       const token = expiresAt + "." + await hmac(expiresAt, env.SESSION_SECRET);
-      return json({ ok: true }, 200, new Headers([...cors, ["set-cookie", sessionCookie(token, sessionMaxAgeSeconds)]]));
+      return json({ ok: true, token }, 200, new Headers([...cors, ["set-cookie", sessionCookie(token, sessionMaxAgeSeconds)]]));
     }
 
     if (request.method === "GET" && url.pathname === "/api/admin/session") {

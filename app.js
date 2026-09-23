@@ -1,4 +1,5 @@
 const API_BASE = (window.TRIPON_ADMIN_API_BASE || "").replace(/\/$/, "");
+const SESSION_TOKEN_KEY = "tripon_admin_session_token";
 const REFRESH_MS = 10000;
 let servers = [];
 let pendingAction = null;
@@ -142,7 +143,10 @@ function addActivity(serverId, action, status) {
 }
 
 async function api(path, options = {}) {
-  const response = await fetch(API_BASE + path, { credentials: "include", ...options });
+  const headers = new Headers(options.headers || {});
+  const token = sessionStorage.getItem(SESSION_TOKEN_KEY);
+  if (token) headers.set("Authorization", "Bearer " + token);
+  const response = await fetch(API_BASE + path, { credentials: "include", ...options, headers });
   if (response.status === 401) throw new Error("AUTH_REQUIRED");
   if (!response.ok) throw new Error("REQUEST_FAILED");
   return response.status === 204 ? null : response.json();
@@ -204,14 +208,15 @@ els.loginForm.addEventListener("submit", async event => {
   els.loginError.textContent = "";
   const form = new FormData(els.loginForm);
   try {
-    await api("/api/admin/login", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id: form.get("id"), password: form.get("password") }) });
+    const result = await api("/api/admin/login", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id: form.get("id"), password: form.get("password") }) });
+    sessionStorage.setItem(SESSION_TOKEN_KEY, result.token);
     els.loginForm.reset();
     showDashboard();
   } catch {
     els.loginError.textContent = "관리자 ID 또는 비밀번호를 확인해 주세요.";
   }
 });
-els.logoutBtn.addEventListener("click", async () => { try { await api("/api/admin/logout", { method: "POST" }); } finally { showLogin(); } });
+els.logoutBtn.addEventListener("click", async () => { try { await api("/api/admin/logout", { method: "POST" }); } finally { sessionStorage.removeItem(SESSION_TOKEN_KEY); showLogin(); } });
 els.refreshBtn.addEventListener("click", loadServers);
 els.closeConfirmBtn.addEventListener("click", () => els.confirmDialog.close());
 els.cancelConfirmBtn.addEventListener("click", () => els.confirmDialog.close());
