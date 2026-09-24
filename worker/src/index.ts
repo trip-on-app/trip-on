@@ -218,6 +218,31 @@ async function listUsers(env: Env, cors: Headers): Promise<Response> {
   return json({ users: result.results }, 200, cors);
 }
 
+async function listErrorReports(env: Env, cors: Headers): Promise<Response> {
+  const result = await env.DB.prepare(
+    `SELECT id, user_uid AS userUid, service, error_code AS errorCode, detail,
+            occurred_at AS occurredAt, created_at AS createdAt,
+            screenshot_mime AS screenshotMime,
+            CASE WHEN screenshot_base64 IS NULL THEN 0 ELSE 1 END AS hasScreenshot,
+            status
+       FROM error_reports
+      ORDER BY created_at DESC
+      LIMIT 200`,
+  ).all();
+  return json({ reports: result.results }, 200, cors);
+}
+
+async function getErrorReport(env: Env, cors: Headers, id: string): Promise<Response> {
+  const report = await env.DB.prepare(
+    `SELECT id, user_uid AS userUid, service, error_code AS errorCode, detail,
+            occurred_at AS occurredAt, created_at AS createdAt,
+            screenshot_base64 AS screenshotBase64, screenshot_mime AS screenshotMime,
+            status
+       FROM error_reports WHERE id = ?`,
+  ).bind(id).first();
+  return report ? json({ report }, 200, cors) : json({ error: "REPORT_NOT_FOUND" }, 404, cors);
+}
+
 async function savePromotion(request: Request, env: Env, cors: Headers, id?: string): Promise<Response> {
   const body = await request.json<PromotionInput>().catch(() => ({}));
   const input = promotionInput(body);
@@ -285,6 +310,15 @@ export default {
 
     if (request.method === "GET" && url.pathname === "/api/users") {
       return listUsers(env, cors);
+    }
+
+    if (request.method === "GET" && url.pathname === "/api/error-reports") {
+      return listErrorReports(env, cors);
+    }
+
+    const errorReportMatch = url.pathname.match(/^\/api\/error-reports\/([0-9a-f-]{36})$/i);
+    if (request.method === "GET" && errorReportMatch) {
+      return getErrorReport(env, cors, errorReportMatch[1]);
     }
 
     if (request.method === "POST" && url.pathname === "/api/promotions") {
