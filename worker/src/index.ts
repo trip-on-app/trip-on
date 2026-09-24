@@ -100,6 +100,27 @@ async function pushPcStatus(request: Request, env: Env): Promise<Response> {
   if (!serverId || !percent(body.cpu) || !percent(body.gpu) || !percent(body.ram) || !temperature || !averages || typeof averages !== "object") return json({ error: "INVALID_STATUS" }, 400);
   const latency = averages as Record<string, unknown>;
   for (const key of ["daily", "weekly", "monthly"]) if (latency[key] !== null && (typeof latency[key] !== "number" || !Number.isFinite(latency[key]) || latency[key] < 0 || latency[key] > 120_000)) return json({ error: "INVALID_STATUS" }, 400);
+  let gatewayUrl: string | null = null;
+  if (typeof body.gatewayUrl === "string" && body.gatewayUrl.length <= 300) {
+    try {
+      const candidate = new URL(body.gatewayUrl);
+      if (candidate.protocol === "https:" && candidate.hostname.endsWith(".trycloudflare.com") && candidate.username === "" && candidate.password === "") {
+        gatewayUrl = candidate.origin;
+      }
+    } catch { /* invalid agent-provided URL */ }
+    if (!gatewayUrl) return json({ error: "INVALID_GATEWAY_URL" }, 400);
+  } else if (body.gatewayUrl !== undefined && body.gatewayUrl !== null) {
+    return json({ error: "INVALID_GATEWAY_URL" }, 400);
+  }
+  if (!gatewayUrl) {
+    const existing = await env.DB.prepare("SELECT status_json FROM admin_pc_status WHERE server_id = ?").bind(serverId).first<{ status_json: string }>();
+    if (existing?.status_json) {
+      try {
+        const previous = JSON.parse(existing.status_json) as Record<string, unknown>;
+        if (typeof previous.gatewayUrl === "string") gatewayUrl = previous.gatewayUrl;
+      } catch { /* ignore stale malformed status */ }
+    }
+  }
   const status = {
     serverId,
     name: typeof body.name === "string" ? body.name.slice(0, 80) : (serverId === "pc-1" ? "AI PC 01" : "AI PC 02"),
@@ -112,6 +133,7 @@ async function pushPcStatus(request: Request, env: Env): Promise<Response> {
     lastAiResponseAt: typeof body.lastAiResponseAt === "string" ? body.lastAiResponseAt.slice(0, 40) : null,
     averageLatencyMs: { daily: latency.daily, weekly: latency.weekly, monthly: latency.monthly },
     requests: body.requests && typeof body.requests === "object" ? body.requests : { total: 0, completed: 0, failed: 0, active: 0 },
+    gatewayUrl,
   };
   await env.DB.prepare("INSERT INTO admin_pc_status (server_id, status_json, updated_at) VALUES (?, ?, ?) ON CONFLICT(server_id) DO UPDATE SET status_json = excluded.status_json, updated_at = excluded.updated_at").bind(serverId, JSON.stringify(status), new Date().toISOString()).run();
   return json({ ok: true }, 202);
@@ -178,6 +200,24 @@ async function listPromotions(env: Env, cors: Headers): Promise<Response> {
   return json({ promotions: result.results }, 200, cors);
 }
 
+async function listUsers(env: Env, cors: Headers): Promise<Response> {
+  const result = await env.DB.prepare(
+    `SELECT
+       uid,
+       COALESCE(NULLIF(nickname, ''), NULLIF(google_name, ''), 'Traveler') AS name,
+       provider,
+       email,
+       plan,
+       signup_complete AS signupComplete,
+       created_at AS createdAt,
+       last_login_at AS lastLoginAt,
+       updated_at AS updatedAt
+     FROM users
+     ORDER BY COALESCE(updated_at, last_login_at, created_at) DESC`,
+  ).all();
+  return json({ users: result.results }, 200, cors);
+}
+
 async function savePromotion(request: Request, env: Env, cors: Headers, id?: string): Promise<Response> {
   const body = await request.json<PromotionInput>().catch(() => ({}));
   const input = promotionInput(body);
@@ -241,6 +281,10 @@ export default {
 
     if (request.method === "GET" && url.pathname === "/api/promotions") {
       return listPromotions(env, cors);
+    }
+
+    if (request.method === "GET" && url.pathname === "/api/users") {
+      return listUsers(env, cors);
     }
 
     if (request.method === "POST" && url.pathname === "/api/promotions") {
