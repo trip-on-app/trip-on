@@ -119,15 +119,27 @@ async function pushPcStatus(request: Request, env: Env): Promise<Response> {
 
 async function readPcStatuses(env: Env, cors: Headers): Promise<Response> {
   const result = await env.DB.prepare("SELECT server_id, status_json, updated_at FROM admin_pc_status WHERE server_id IN ('pc-1','pc-2')").all<{ server_id: string; status_json: string; updated_at: string }>();
+  const settingsResult = await env.DB.prepare("SELECT server_id, accept_requests FROM admin_pc_settings WHERE server_id IN ('pc-1','pc-2')").all<{ server_id: string; accept_requests: number }>();
   const rows = new Map((result.results || []).map(row => [row.server_id, row]));
+  const settings = new Map((settingsResult.results || []).map(row => [row.server_id, row.accept_requests !== 0]));
   const servers = ["pc-1", "pc-2"].map(serverId => {
     const row = rows.get(serverId);
-    if (!row) return { serverId, name: serverId === "pc-1" ? "AI PC 01" : "AI PC 02", model: "gemma3:12b-it-qat", online: false, cpu: null, gpu: null, ram: null, gpuTempC: null, lastAiResponseAt: null, averageLatencyMs: { daily: null, weekly: null, monthly: null }, requests: { total: 0, completed: 0, failed: 0, active: 0 }, lastSeenAt: null };
+    const acceptRequests = settings.get(serverId) ?? true;
+    if (!row) return { serverId, name: serverId === "pc-1" ? "AI PC 01" : "AI PC 02", model: "gemma3:12b-it-qat", online: false, acceptRequests, cpu: null, gpu: null, ram: null, gpuTempC: null, lastAiResponseAt: null, averageLatencyMs: { daily: null, weekly: null, monthly: null }, requests: { total: 0, completed: 0, failed: 0, active: 0 }, lastSeenAt: null };
     const status = JSON.parse(row.status_json) as Record<string, unknown>;
     const online = Date.now() - Date.parse(row.updated_at) <= 75_000;
-    return { ...status, serverId, online, lastSeenAt: row.updated_at };
+    return { ...status, serverId, online, acceptRequests, lastSeenAt: row.updated_at };
   });
   return json({ servers }, 200, cors);
+}
+
+async function setPcAcceptRequests(request: Request, env: Env, cors: Headers, serverId: "pc-1" | "pc-2"): Promise<Response> {
+  const body = await request.json<{ acceptRequests?: unknown }>().catch(() => ({}));
+  if (typeof body.acceptRequests !== "boolean") return json({ error: "INVALID_ACCEPT_REQUESTS" }, 400, cors);
+  const now = new Date().toISOString();
+  await env.DB.prepare("INSERT INTO admin_pc_settings (server_id, accept_requests, updated_at) VALUES (?, ?, ?) ON CONFLICT(server_id) DO UPDATE SET accept_requests = excluded.accept_requests, updated_at = excluded.updated_at")
+    .bind(serverId, body.acceptRequests ? 1 : 0, now).run();
+  return json({ ok: true, serverId, acceptRequests: body.acceptRequests, updatedAt: now }, 200, cors);
 }
 
 async function pollPcCommand(request: Request, env: Env): Promise<Response> {
@@ -220,6 +232,11 @@ export default {
 
     if (request.method === "GET" && url.pathname === "/api/servers") {
       return readPcStatuses(env, cors);
+    }
+
+    const acceptRequestsMatch = url.pathname.match(/^\/api\/servers\/(pc-[12])\/accept-requests$/);
+    if (request.method === "PUT" && acceptRequestsMatch) {
+      return setPcAcceptRequests(request, env, cors, acceptRequestsMatch[1] as "pc-1" | "pc-2");
     }
 
     if (request.method === "GET" && url.pathname === "/api/promotions") {
