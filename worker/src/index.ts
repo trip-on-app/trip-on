@@ -184,19 +184,20 @@ async function recordPcCommandResult(request: Request, env: Env): Promise<Respon
   return json({ ok: saved.meta.changes > 0 });
 }
 
-type PromotionInput = { code?: unknown; plan?: unknown; people?: unknown; date?: unknown };
+type PromotionInput = { code?: unknown; plan?: unknown; durationDays?: unknown; people?: unknown; date?: unknown };
 
-function promotionInput(body: PromotionInput): { code: string; plan: "Pro" | "Enterprise"; people: number | null; date: string | null } | null {
+function promotionInput(body: PromotionInput): { code: string; plan: "Pro" | "Enterprise"; durationDays: number; people: number | null; date: string | null } | null {
   const code = typeof body.code === "string" ? body.code.trim().toUpperCase() : "";
   const plan = body.plan === "Pro" || body.plan === "Enterprise" ? body.plan : null;
+  const durationDays = Number(body.durationDays ?? 30);
   const people = body.people === null || body.people === undefined || body.people === "" ? null : Number(body.people);
   const date = body.date === null || body.date === undefined || body.date === "" ? null : String(body.date);
-  if (!/^[A-Z0-9_-]{4,48}$/.test(code) || !plan || (people !== null && (!Number.isInteger(people) || people < 1)) || (date !== null && !/^\d{4}-\d{2}-\d{2}$/.test(date))) return null;
-  return { code, plan, people, date };
+  if (!/^[A-Z0-9_-]{4,48}$/.test(code) || !plan || !Number.isInteger(durationDays) || durationDays < 1 || durationDays > 365 || (people !== null && (!Number.isInteger(people) || people < 1)) || (date !== null && !/^\d{4}-\d{2}-\d{2}$/.test(date))) return null;
+  return { code, plan, durationDays, people, date };
 }
 
 async function listPromotions(env: Env, cors: Headers): Promise<Response> {
-  const result = await env.DB.prepare("SELECT id, code, plan, max_uses AS people, used_count AS used, expires_at AS date, created_at AS createdAt, updated_at AS updatedAt FROM admin_promotions ORDER BY updated_at DESC").all();
+  const result = await env.DB.prepare("SELECT id, code, plan, duration_days AS durationDays, max_uses AS people, used_count AS used, expires_at AS date, created_at AS createdAt, updated_at AS updatedAt FROM admin_promotions ORDER BY updated_at DESC").all();
   return json({ promotions: result.results }, 200, cors);
 }
 
@@ -249,12 +250,34 @@ async function savePromotion(request: Request, env: Env, cors: Headers, id?: str
   if (!input) return json({ error: "INVALID_PROMOTION" }, 400, cors);
   const now = new Date().toISOString();
   const promotionId = id ?? crypto.randomUUID();
+  const maxUses = input.people ?? 2147483647;
+  const promoData = JSON.stringify({
+    active: true,
+    type: "free_days",
+    value: input.durationDays,
+    maxUses,
+    onePerUser: true,
+    plan: input.plan.toLowerCase(),
+    ...(input.date ? { expiresAt: `${input.date}T23:59:59.999Z` } : {}),
+  });
   try {
+    const existing = id
+      ? await env.DB.prepare("SELECT code FROM admin_promotions WHERE id = ?").bind(promotionId).first<{ code: string }>()
+      : null;
+    if (id && !existing) return json({ error: "PROMOTION_NOT_FOUND" }, 404, cors);
+    const codeCollision = await env.DB.prepare("SELECT code FROM promo_codes WHERE code = ?").bind(input.code).first<{ code: string }>();
+    if (codeCollision && codeCollision.code !== existing?.code.toUpperCase()) return json({ error: "DUPLICATE_CODE" }, 409, cors);
     if (id) {
-      const result = await env.DB.prepare("UPDATE admin_promotions SET code = ?, plan = ?, max_uses = ?, expires_at = ?, updated_at = ? WHERE id = ?").bind(input.code, input.plan, input.people, input.date, now, promotionId).run();
-      if (!result.meta.changes) return json({ error: "PROMOTION_NOT_FOUND" }, 404, cors);
+      await env.DB.batch([
+        env.DB.prepare("UPDATE promo_codes SET data_json=json_set(data_json,'$.active',json('false')),updated_at=? WHERE code=? AND code<>?").bind(now, existing.code.toUpperCase(), input.code),
+        env.DB.prepare("UPDATE admin_promotions SET code = ?, plan = ?, duration_days = ?, max_uses = ?, expires_at = ?, updated_at = ? WHERE id = ?").bind(input.code, input.plan, input.durationDays, input.people, input.date, now, promotionId),
+        env.DB.prepare("INSERT INTO promo_codes(code,data_json,used_count,updated_at) VALUES(?,?,0,?) ON CONFLICT(code) DO UPDATE SET data_json=excluded.data_json,updated_at=excluded.updated_at").bind(input.code, promoData, now),
+      ]);
     } else {
-      await env.DB.prepare("INSERT INTO admin_promotions (id, code, plan, max_uses, expires_at, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)").bind(promotionId, input.code, input.plan, input.people, input.date, now, now).run();
+      await env.DB.batch([
+        env.DB.prepare("INSERT INTO admin_promotions (id, code, plan, duration_days, max_uses, expires_at, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)").bind(promotionId, input.code, input.plan, input.durationDays, input.people, input.date, now, now),
+        env.DB.prepare("INSERT INTO promo_codes(code,data_json,used_count,updated_at) VALUES(?,?,0,?) ON CONFLICT(code) DO UPDATE SET data_json=excluded.data_json,updated_at=excluded.updated_at").bind(input.code, promoData, now),
+      ]);
     }
   } catch (error) {
     if (String(error).includes("UNIQUE constraint failed")) return json({ error: "DUPLICATE_CODE" }, 409, cors);
