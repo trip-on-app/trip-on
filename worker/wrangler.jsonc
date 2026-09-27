@@ -11,6 +11,8 @@
     }
   ],
   "vars": {
-    "DASHBOARD_ORIGIN": "https://trip-on-app.github.io"
+    "DASHBOARD_ORIGIN": "https://trip-on-app.github.io",
+    "LOCAL_AI_GATEWAY_DISCOVERY_URL": "https://raw.githubusercontent.com/trip-on-app/trip-on-ai-gateway/main/gateway.json"
   }
 }
+
