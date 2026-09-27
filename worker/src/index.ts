@@ -7,6 +7,7 @@ export interface Env {
   ADMIN_CONTROL_URL?: string;
   AGENT_PUSH_TOKEN: string;
   DASHBOARD_ORIGIN: string;
+  LOCAL_AI_GATEWAY_DISCOVERY_URL?: string;
   DB: D1Database;
 }
 
@@ -134,6 +135,8 @@ async function pushPcStatus(request: Request, env: Env): Promise<Response> {
     averageLatencyMs: { daily: latency.daily, weekly: latency.weekly, monthly: latency.monthly },
     requests: body.requests && typeof body.requests === "object" ? body.requests : { total: 0, completed: 0, failed: 0, active: 0 },
     gatewayUrl,
+    relayConfigured: body.relayConfigured === true,
+    relayConnected: body.relayConfigured === true && body.relayConnected === true,
   };
   await env.DB.prepare("INSERT INTO admin_pc_status (server_id, status_json, updated_at) VALUES (?, ?, ?) ON CONFLICT(server_id) DO UPDATE SET status_json = excluded.status_json, updated_at = excluded.updated_at").bind(serverId, JSON.stringify(status), new Date().toISOString()).run();
   return json({ ok: true }, 202);
@@ -144,14 +147,73 @@ async function readPcStatuses(env: Env, cors: Headers): Promise<Response> {
   const settingsResult = await env.DB.prepare("SELECT server_id, accept_requests FROM admin_pc_settings WHERE server_id IN ('pc-1','pc-2')").all<{ server_id: string; accept_requests: number }>();
   const rows = new Map((result.results || []).map(row => [row.server_id, row]));
   const settings = new Map((settingsResult.results || []).map(row => [row.server_id, row.accept_requests !== 0]));
-  const servers = ["pc-1", "pc-2"].map(serverId => {
+  let discovered = new Map<string, string>();
+  if (env.LOCAL_AI_GATEWAY_DISCOVERY_URL) {
+    try {
+      const discoveryUrl = new URL(env.LOCAL_AI_GATEWAY_DISCOVERY_URL);
+      const cacheKey = new Request(discoveryUrl);
+      const edgeCache = (caches as unknown as { default: Cache }).default;
+      let body: { gateways?: Record<string, { url?: unknown; enabled?: unknown }> } | null = null;
+      try {
+        const cached = await edgeCache.match(cacheKey);
+        if (cached) body = await cached.json() as typeof body;
+      } catch { /* continue to GitHub when cache is unavailable */ }
+      if (!body) {
+        const response = await fetch(discoveryUrl, { headers: { accept: "application/vnd.github+json", "user-agent": "TripON-AI-Admin" }, signal: AbortSignal.timeout(3_000) });
+        if (response.ok) {
+          const payload = await response.json() as Record<string, unknown>;
+          body = typeof payload.content === "string"
+            ? JSON.parse(new TextDecoder().decode(Uint8Array.from(atob(payload.content.replace(/\s/g, "")), char => char.charCodeAt(0)))) as typeof body
+            : payload as typeof body;
+          try { await edgeCache.put(cacheKey, new Response(JSON.stringify(body), { headers: { "cache-control": "public, max-age=30" } })); } catch { /* optional cache */ }
+        }
+      }
+      if (body) {
+        for (const id of ["pc-1", "pc-2"]) {
+          const entry = body.gateways?.[id];
+          if (!entry || entry.enabled === false || typeof entry.url !== "string") continue;
+          try {
+            const candidate = new URL(entry.url);
+            if (candidate.protocol === "https:" && candidate.hostname.endsWith(".trycloudflare.com") && !candidate.username && !candidate.password) discovered.set(id, candidate.origin);
+          } catch { /* ignore invalid published tunnel URLs */ }
+        }
+      }
+    } catch { /* the dashboard can still use recent agent heartbeats */ }
+  }
+  const servers = await Promise.all(["pc-1", "pc-2"].map(async serverId => {
     const row = rows.get(serverId);
     const acceptRequests = settings.get(serverId) ?? true;
-    if (!row) return { serverId, name: serverId === "pc-1" ? "AI PC 01" : "AI PC 02", model: "gemma3:12b-it-qat", online: false, acceptRequests, cpu: null, gpu: null, ram: null, gpuTempC: null, lastAiResponseAt: null, averageLatencyMs: { daily: null, weekly: null, monthly: null }, requests: { total: 0, completed: 0, failed: 0, active: 0 }, lastSeenAt: null };
-    const status = JSON.parse(row.status_json) as Record<string, unknown>;
-    const online = Date.now() - Date.parse(row.updated_at) <= 75_000;
-    return { ...status, serverId, online, acceptRequests, lastSeenAt: row.updated_at };
-  });
+    const status = row ? JSON.parse(row.status_json) as Record<string, unknown> : {};
+    const heartbeatOnline = Boolean(row) && Date.now() - Date.parse(row!.updated_at) <= 75_000;
+    if (heartbeatOnline) return { ...status, serverId, online: true, acceptRequests, lastSeenAt: row!.updated_at };
+
+    const statusGateway = validDynamicGatewayUrl(status.gatewayUrl);
+    const candidates = [...new Set([discovered.get(serverId), statusGateway].filter((value): value is string => Boolean(value)))];
+    for (const gatewayUrl of candidates) {
+      try {
+        const health = await fetch(`${gatewayUrl}/health`, { signal: AbortSignal.timeout(5_000) });
+        const body = await health.json() as { ok?: unknown; model?: unknown };
+        if (health.ok && body.ok === true) {
+          return {
+            ...status,
+            serverId,
+            model: typeof body.model === "string" ? body.model : status.model,
+            online: true,
+            acceptRequests,
+            lastSeenAt: new Date().toISOString(),
+            connectionSource: "gateway_health",
+            metricsStale: true,
+            relayConnected: false,
+            cpu: null,
+            gpu: null,
+            ram: null,
+            gpuTempC: null,
+          };
+        }
+      } catch { /* do not mark an unreachable gateway online */ }
+    }
+    return { ...status, serverId, online: false, relayConnected: false, acceptRequests, lastSeenAt: row?.updated_at ?? null };
+  }));
   return json({ servers }, 200, cors);
 }
 
@@ -365,3 +427,4 @@ export default {
     return json({ error: "NOT_FOUND" }, 404, cors);
   },
 } satisfies ExportedHandler<Env>;
+
