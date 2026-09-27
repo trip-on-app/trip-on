@@ -1,4 +1,3 @@
-export interface Env {
   ADMIN_ID: string;
   ADMIN_PASSWORD: string;
   SESSION_SECRET: string;
@@ -32,6 +31,17 @@ function corsHeaders(request: Request, env: Env): Headers {
     headers.set("access-control-allow-methods", "GET, POST, PUT, OPTIONS");
   }
   return headers;
+}
+
+function validDynamicGatewayUrl(value: unknown): string | null {
+  if (typeof value !== "string" || value.length > 300) return null;
+  try {
+    const candidate = new URL(value);
+    if (candidate.protocol !== "https:" || !candidate.hostname.endsWith(".trycloudflare.com") || candidate.username || candidate.password) return null;
+    return candidate.origin;
+  } catch {
+    return null;
+  }
 }
 
 function cookie(request: Request, name: string): string | null {
@@ -172,10 +182,8 @@ async function readPcStatuses(env: Env, cors: Headers): Promise<Response> {
         for (const id of ["pc-1", "pc-2"]) {
           const entry = body.gateways?.[id];
           if (!entry || entry.enabled === false || typeof entry.url !== "string") continue;
-          try {
-            const candidate = new URL(entry.url);
-            if (candidate.protocol === "https:" && candidate.hostname.endsWith(".trycloudflare.com") && !candidate.username && !candidate.password) discovered.set(id, candidate.origin);
-          } catch { /* ignore invalid published tunnel URLs */ }
+          const validUrl = validDynamicGatewayUrl(entry.url);
+          if (validUrl) discovered.set(id, validUrl);
         }
       }
     } catch { /* the dashboard can still use recent agent heartbeats */ }
@@ -183,8 +191,10 @@ async function readPcStatuses(env: Env, cors: Headers): Promise<Response> {
   const servers = await Promise.all(["pc-1", "pc-2"].map(async serverId => {
     const row = rows.get(serverId);
     const acceptRequests = settings.get(serverId) ?? true;
-    const status = row ? JSON.parse(row.status_json) as Record<string, unknown> : {};
-    const heartbeatOnline = Boolean(row) && Date.now() - Date.parse(row!.updated_at) <= 75_000;
+    let status: Record<string, unknown> = {};
+    try { status = row ? JSON.parse(row.status_json) as Record<string, unknown> : {}; } catch { /* ignore malformed stale status */ }
+    const updatedAt = row ? Date.parse(row.updated_at) : Number.NaN;
+    const heartbeatOnline = Boolean(row) && Number.isFinite(updatedAt) && Date.now() - updatedAt <= 75_000;
     if (heartbeatOnline) return { ...status, serverId, online: true, acceptRequests, lastSeenAt: row!.updated_at };
 
     const statusGateway = validDynamicGatewayUrl(status.gatewayUrl);
@@ -194,21 +204,7 @@ async function readPcStatuses(env: Env, cors: Headers): Promise<Response> {
         const health = await fetch(`${gatewayUrl}/health`, { signal: AbortSignal.timeout(5_000) });
         const body = await health.json() as { ok?: unknown; model?: unknown };
         if (health.ok && body.ok === true) {
-          return {
-            ...status,
-            serverId,
-            model: typeof body.model === "string" ? body.model : status.model,
-            online: true,
-            acceptRequests,
-            lastSeenAt: new Date().toISOString(),
-            connectionSource: "gateway_health",
-            metricsStale: true,
-            relayConnected: false,
-            cpu: null,
-            gpu: null,
-            ram: null,
-            gpuTempC: null,
-          };
+          return { ...status, serverId, model: typeof body.model === "string" ? body.model : status.model, online: true, acceptRequests, lastSeenAt: new Date().toISOString(), connectionSource: "gateway_health", metricsStale: true, relayConnected: false, cpu: null, gpu: null, ram: null, gpuTempC: null };
         }
       } catch { /* do not mark an unreachable gateway online */ }
     }
@@ -216,7 +212,6 @@ async function readPcStatuses(env: Env, cors: Headers): Promise<Response> {
   }));
   return json({ servers }, 200, cors);
 }
-
 async function setPcAcceptRequests(request: Request, env: Env, cors: Headers, serverId: "pc-1" | "pc-2"): Promise<Response> {
   const body = await request.json<{ acceptRequests?: unknown }>().catch(() => ({}));
   if (typeof body.acceptRequests !== "boolean") return json({ error: "INVALID_ACCEPT_REQUESTS" }, 400, cors);
@@ -381,7 +376,12 @@ export default {
     if (denied) return denied;
 
     if (request.method === "GET" && url.pathname === "/api/servers") {
-      return readPcStatuses(env, cors);
+      try {
+        return await readPcStatuses(env, cors);
+      } catch (error) {
+        console.error(JSON.stringify({ event: "pc_status_read_failed", message: error instanceof Error ? error.message : "unknown" }));
+        return json({ error: "STATUS_READ_FAILED" }, 503, cors);
+      }
     }
 
     const acceptRequestsMatch = url.pathname.match(/^\/api\/servers\/(pc-[12])\/accept-requests$/);
@@ -427,4 +427,3 @@ export default {
     return json({ error: "NOT_FOUND" }, 404, cors);
   },
 } satisfies ExportedHandler<Env>;
-
