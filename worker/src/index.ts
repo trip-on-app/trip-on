@@ -29,7 +29,7 @@ function corsHeaders(request: Request, env: Env): Headers {
     headers.set("access-control-allow-origin", origin);
     headers.set("access-control-allow-credentials", "true");
     headers.set("access-control-allow-headers", "authorization, content-type");
-    headers.set("access-control-allow-methods", "GET, POST, PUT, OPTIONS");
+    headers.set("access-control-allow-methods", "GET, POST, PUT, DELETE, OPTIONS");
   }
   return headers;
 }
@@ -264,6 +264,11 @@ async function listAnnouncements(env: Env, cors: Headers): Promise<Response> {
   return json({ announcements: result.results }, 200, cors);
 }
 
+async function deleteAnnouncement(env: Env, cors: Headers, id: string): Promise<Response> {
+  await env.DB.prepare("DELETE FROM admin_announcements WHERE id = ?").bind(id).run();
+  return json({ ok: true }, 200, cors);
+}
+
 async function saveAnnouncement(request: Request, env: Env, cors: Headers): Promise<Response> {
   const body = await request.json<{ title?: unknown; body?: unknown; published?: unknown; showPopup?: unknown }>().catch(() => ({}));
   const title = typeof body.title === "string" ? body.title.trim() : "";
@@ -417,6 +422,11 @@ export default {
 
     if (request.method === "POST" && url.pathname === "/api/announcements") {
       return saveAnnouncement(request, env, cors);
+    }
+
+    const announcementMatch = url.pathname.match(/^\/api\/announcements\/([0-9a-f-]{36})$/i);
+    if (request.method === "DELETE" && announcementMatch) {
+      return deleteAnnouncement(env, cors, announcementMatch[1]);
     }
 
     if (request.method === "GET" && url.pathname === "/api/users") {
