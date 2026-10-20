@@ -260,7 +260,7 @@ async function listPromotions(env: Env, cors: Headers): Promise<Response> {
 }
 
 async function listAnnouncements(env: Env, cors: Headers): Promise<Response> {
-  const result = await env.DB.prepare("SELECT id, title, body, published, show_popup AS showPopup, created_at AS createdAt, updated_at AS updatedAt FROM admin_announcements ORDER BY updated_at DESC").all();
+  const result = await env.DB.prepare("SELECT id, title, body, published, show_popup AS showPopup, show_in_list AS showInList, created_at AS createdAt, updated_at AS updatedAt FROM admin_announcements ORDER BY updated_at DESC").all();
   return json({ announcements: result.results }, 200, cors);
 }
 
@@ -270,14 +270,16 @@ async function deleteAnnouncement(env: Env, cors: Headers, id: string): Promise<
 }
 
 async function saveAnnouncement(request: Request, env: Env, cors: Headers): Promise<Response> {
-  const body = await request.json<{ title?: unknown; body?: unknown; published?: unknown; showPopup?: unknown }>().catch(() => ({}));
+  const body = await request.json<{ title?: unknown; body?: unknown; published?: unknown; showPopup?: unknown; showInList?: unknown }>().catch(() => ({}));
   const title = typeof body.title === "string" ? body.title.trim() : "";
   const content = typeof body.body === "string" ? body.body.trim() : "";
+  const showPopup = body.showPopup !== false;
+  const showInList = body.showInList !== false;
   const plainTextLength = content.replace(/<[^>]*>/g, "").length;
-  if (!title || title.length > 120 || !content || content.length > 20000 || plainTextLength > 5000 || typeof body.published !== "boolean" || (body.showPopup !== undefined && typeof body.showPopup !== "boolean")) return json({ error: "INVALID_ANNOUNCEMENT" }, 400, cors);
+  if ((!title && (showInList || !showPopup)) || title.length > 120 || !content || content.length > 20000 || plainTextLength > 5000 || typeof body.published !== "boolean" || (body.showPopup !== undefined && typeof body.showPopup !== "boolean") || (body.showInList !== undefined && typeof body.showInList !== "boolean") || (!showPopup && !showInList)) return json({ error: "INVALID_ANNOUNCEMENT" }, 400, cors);
   const id = crypto.randomUUID();
   const now = new Date().toISOString();
-  await env.DB.prepare("INSERT INTO admin_announcements (id, title, body, published, show_popup, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)").bind(id, title, content, body.published ? 1 : 0, body.showPopup === false ? 0 : 1, now, now).run();
+  await env.DB.prepare("INSERT INTO admin_announcements (id, title, body, published, show_popup, show_in_list, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)").bind(id, title, content, body.published ? 1 : 0, showPopup ? 1 : 0, showInList ? 1 : 0, now, now).run();
   return json({ ok: true, id }, 201, cors);
 }
 
