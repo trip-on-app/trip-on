@@ -1,3 +1,4 @@
+export interface Env {
   ADMIN_ID: string;
   ADMIN_PASSWORD: string;
   SESSION_SECRET: string;
@@ -267,7 +268,8 @@ async function saveAnnouncement(request: Request, env: Env, cors: Headers): Prom
   const body = await request.json<{ title?: unknown; body?: unknown; published?: unknown }>().catch(() => ({}));
   const title = typeof body.title === "string" ? body.title.trim() : "";
   const content = typeof body.body === "string" ? body.body.trim() : "";
-  if (!title || title.length > 120 || !content || content.length > 5000 || typeof body.published !== "boolean") return json({ error: "INVALID_ANNOUNCEMENT" }, 400, cors);
+  const plainTextLength = content.replace(/<[^>]*>/g, "").length;
+  if (!title || title.length > 120 || !content || content.length > 20000 || plainTextLength > 5000 || typeof body.published !== "boolean") return json({ error: "INVALID_ANNOUNCEMENT" }, 400, cors);
   const id = crypto.randomUUID();
   const now = new Date().toISOString();
   await env.DB.prepare("INSERT INTO admin_announcements (id, title, body, published, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)").bind(id, title, content, body.published ? 1 : 0, now, now).run();
