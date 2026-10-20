@@ -103,3 +103,9 @@ wrangler deploy
 ```
 
 배포된 Worker URL을 Pages에 연결하거나 `TRIPON_ADMIN_API_BASE`로 주입하면, 대시보드는 로그인 전에는 어떤 상태·제어 정보도 표시하지 않습니다.
+
+### 공지사항
+
+관리자 공지는 admin_announcements D1 테이블에 저장됩니다. 배포 전 0006_admin_announcements.sql 마이그레이션을 적용해야 하며, GET/POST /api/announcements는 관리자 세션 인증을 요구합니다. 게시 상태로 저장된 공지는 앱 API의 GET /v1/announcements에서 공개되며 마이 탭의 공지사항 목록에 표시되고, 새 공지는 앱 실행 시 한 번 팝업으로 안내됩니다.
+
+

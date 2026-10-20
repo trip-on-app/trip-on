@@ -258,6 +258,22 @@ async function listPromotions(env: Env, cors: Headers): Promise<Response> {
   return json({ promotions: result.results }, 200, cors);
 }
 
+async function listAnnouncements(env: Env, cors: Headers): Promise<Response> {
+  const result = await env.DB.prepare("SELECT id, title, body, published, created_at AS createdAt, updated_at AS updatedAt FROM admin_announcements ORDER BY updated_at DESC").all();
+  return json({ announcements: result.results }, 200, cors);
+}
+
+async function saveAnnouncement(request: Request, env: Env, cors: Headers): Promise<Response> {
+  const body = await request.json<{ title?: unknown; body?: unknown; published?: unknown }>().catch(() => ({}));
+  const title = typeof body.title === "string" ? body.title.trim() : "";
+  const content = typeof body.body === "string" ? body.body.trim() : "";
+  if (!title || title.length > 120 || !content || content.length > 5000 || typeof body.published !== "boolean") return json({ error: "INVALID_ANNOUNCEMENT" }, 400, cors);
+  const id = crypto.randomUUID();
+  const now = new Date().toISOString();
+  await env.DB.prepare("INSERT INTO admin_announcements (id, title, body, published, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)").bind(id, title, content, body.published ? 1 : 0, now, now).run();
+  return json({ ok: true, id }, 201, cors);
+}
+
 async function listUsers(env: Env, cors: Headers): Promise<Response> {
   const result = await env.DB.prepare(
     `SELECT
@@ -391,6 +407,14 @@ export default {
 
     if (request.method === "GET" && url.pathname === "/api/promotions") {
       return listPromotions(env, cors);
+    }
+
+    if (request.method === "GET" && url.pathname === "/api/announcements") {
+      return listAnnouncements(env, cors);
+    }
+
+    if (request.method === "POST" && url.pathname === "/api/announcements") {
+      return saveAnnouncement(request, env, cors);
     }
 
     if (request.method === "GET" && url.pathname === "/api/users") {
