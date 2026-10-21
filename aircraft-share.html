@@ -1,0 +1,111 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<title>항공기 위치 · Trip ON</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="">
+<style>
+:root{--ink:#10243b;--ink-soft:#5b6b7e;--paper:#fbfaf6;--line:#e3e0d6;--signal:#f5b700;--sky:#cfe3ef}
+*{box-sizing:border-box}
+html,body{width:100%;height:100%;height:100dvh;margin:0;overflow:hidden}
+body{font-family:system-ui,"Noto Sans KR",sans-serif;color:var(--ink);background:var(--sky)}
+#map{position:fixed;inset:0;width:100%;height:100%;height:100dvh;background:var(--sky)}
+.panel{position:fixed;left:50%;bottom:max(12px,env(safe-area-inset-bottom));transform:translateX(-50%);width:min(560px,calc(100% - 24px));max-height:48vh;max-height:48dvh;overflow:auto;background:var(--paper);border-radius:20px;box-shadow:0 12px 40px rgba(16,36,59,.28);z-index:1000}
+.head{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:16px 20px 12px}
+.flight{min-width:0;font-size:clamp(23px,7vw,28px);line-height:1.2;font-weight:700;letter-spacing:.01em;margin:0;overflow-wrap:anywhere}
+.badge{flex:none;display:flex;align-items:center;gap:7px;font-size:13px;color:var(--ink-soft);white-space:nowrap}
+.dot{width:9px;height:9px;border-radius:50%;background:#b9b6aa}
+.live .dot{background:#1fa971;box-shadow:0 0 0 0 rgba(31,169,113,.5);animation:pulse 2s infinite}
+@keyframes pulse{to{box-shadow:0 0 0 8px rgba(31,169,113,0)}}
+.stats{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));border-top:1px dashed var(--line)}
+.stat{min-width:0;padding:12px 18px 14px}
+.stat+.stat{border-left:1px dashed var(--line)}
+.stat small{display:block;font-size:12px;color:var(--ink-soft);margin-bottom:2px}
+.stat b{font-size:clamp(18px,5vw,20px);font-weight:700;font-variant-numeric:tabular-nums;white-space:nowrap}
+.stat b span{font-size:12px;font-weight:400;color:var(--ink-soft);margin-left:3px}
+.foot{padding:10px 20px 14px;border-top:1px solid var(--line);font-size:12px;color:var(--ink-soft);line-height:1.5;overflow-wrap:anywhere}
+.plane{width:44px;height:44px;display:grid;place-items:center;transform-origin:50% 50%;transition:transform .6s linear}
+.plane svg{width:44px;height:44px;filter:drop-shadow(0 2px 3px rgba(16,36,59,.45))}
+.leaflet-control-attribution{font-size:10px}
+.leaflet-top.leaflet-left,.leaflet-top.leaflet-right{top:max(8px,env(safe-area-inset-top))}
+@media(max-width:420px){.panel{width:calc(100% - 20px);border-radius:18px}.head{padding:14px 14px 10px;gap:8px}.badge{font-size:12px}.stat{padding:11px 12px 13px}.foot{padding:9px 14px 12px;font-size:11px}}
+@media(max-height:560px){.panel{max-height:54dvh}.head{padding-top:10px;padding-bottom:8px}.stat{padding-top:8px;padding-bottom:9px}.foot{padding-top:8px;padding-bottom:9px}}
+@media(prefers-reduced-motion:reduce){.live .dot{animation:none}.plane{transition:none}}
+</style>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+</head>
+<body>
+<div id="map" role="img" aria-label="항공기 위치 지도"></div>
+<section class="panel" aria-live="polite">
+  <div class="head">
+    <h1 class="flight" id="flight">위치 찾는 중</h1>
+    <div class="badge" id="badge"><i class="dot"></i><span id="status">위치 확인 중</span></div>
+  </div>
+  <div class="stats">
+    <div class="stat"><small>고도</small><b><span id="alt">–</span><span id="altUnit">ft</span></b></div>
+    <div class="stat"><small>속도</small><b><span id="spd">–</span><span>kt</span></b></div>
+    <div class="stat"><small>방향</small><b><span id="hdg">–</span><span>°</span></b></div>
+  </div>
+  <div class="foot" id="foot">위치 정보를 기다리고 있어요.</div>
+</section>
+<script>
+const API_BASE='https://trip-on-api.trip-on-official-dev.workers.dev';
+const $=id=>document.getElementById(id);
+const params=new URLSearchParams(location.search);
+const rawId=params.get('id')||'';
+const shareId=/^[a-f0-9]{48}$/i.test(rawId)?rawId.toLowerCase():null;
+const map=L.map('map',{zoomControl:false,scrollWheelZoom:false,attributionControl:false}).setView([36.5,127.8],7);
+L.control.zoom({position:'topright'}).addTo(map);
+L.control.attribution({position:'topleft'}).addTo(map);
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:18,attribution:'&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'}).addTo(map);
+const planeSvg='<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="#10243b" stroke="#fbfaf6" stroke-width="1.2" stroke-linejoin="round" d="M12 2c.8 0 1.4.8 1.4 1.8V9l8 4.6v2l-8-2.2v4.3l2.2 1.7V22L12 20.8 8.4 22v-1.8l2.2-1.7v-4.3l-8 2.2v-2l8-4.6V3.8C10.6 2.8 11.2 2 12 2z"/></svg>';
+const icon=L.divIcon({className:'',html:'<div class="plane">'+planeSvg+'</div>',iconSize:[44,44],iconAnchor:[22,22]});
+let marker=null,first=true,stopped=false;
+const trail=L.polyline([],{color:'#f5b700',weight:4,opacity:.9,lineCap:'round'}).addTo(map);
+const trailPoints=[];
+function setStatus(live,label){$('badge').classList.toggle('live',live);$('status').textContent=label}
+function displayTime(value){const date=new Date(value);return Number.isNaN(date.getTime())?'시간 정보 없음':date.toLocaleTimeString('ko-KR',{hour:'numeric',minute:'2-digit',second:'2-digit'})+' 기준'}
+async function refresh(){
+  if(!shareId){setStatus(false,'잘못된 링크');$('flight').textContent='공유 링크를 확인해 주세요';$('foot').textContent='주소의 공유 ID가 올바르지 않아요.';stopped=true;return}
+  try{
+    const response=await fetch(API_BASE+'/v1/aircraft-shares/'+encodeURIComponent(shareId),{cache:'no-store'});
+    const body=await response.json();
+    if(!response.ok)throw Object.assign(new Error(body.error?.message||'위치 정보를 불러오지 못했어요.'),{status:response.status});
+    const data=body.data,point=[data.latitude,data.longitude];
+    const heading=Number.isFinite(data.trackDegrees)?data.trackDegrees:null;
+    $('flight').textContent=data.flightNumber;
+    $('alt').textContent=data.altitudeFeet==null?'–':Math.round(data.altitudeFeet).toLocaleString();
+    $('altUnit').textContent=data.altitudeFeet==null?'':'ft';
+    $('spd').textContent=data.groundSpeedKnots==null?'–':Math.round(data.groundSpeedKnots).toLocaleString();
+    $('hdg').textContent=heading==null?'–':Math.round(heading).toString();
+    const current=data.positionStatus==='CURRENT';
+    setStatus(current,current?'실시간':'마지막 수신');
+    $('foot').textContent=displayTime(data.capturedAt)+' · 30초마다 갱신';
+    if(!marker)marker=L.marker(point,{icon,keyboard:false}).addTo(map);
+    marker.setLatLng(point);
+    const plane=marker.getElement()?.querySelector('.plane');
+    if(plane&&heading!=null)plane.style.transform='rotate('+heading+'deg)';
+    if(current){
+      const previous=trailPoints.at(-1);
+      if(!previous||Math.abs(previous[0]-point[0])>0.00001||Math.abs(previous[1]-point[1])>0.00001){
+        trailPoints.push(point);
+        if(trailPoints.length>300)trailPoints.shift();
+        trail.setLatLngs(trailPoints);
+      }
+    }
+    if(first){map.setView(point,8);first=false;setTimeout(()=>map.invalidateSize(),0)}
+    else if(!map.getBounds().pad(-0.2).contains(point))map.panTo(point,{animate:true,duration:.5});
+  }catch(error){
+    const expired=error instanceof Error&&'status' in error&&error.status===410;
+    setStatus(false,expired?'공유 링크 만료':'연결 오류');
+    $('foot').textContent=expired?'이 공유 링크는 만료되었거나 취소되었습니다.':'위치를 갱신하지 못했어요. 연결을 확인하는 중입니다.';
+    if(expired)stopped=true;
+  }
+}
+refresh();
+setInterval(()=>{if(!stopped)refresh()},30000);
+</script>
+</body>
+</html>
