@@ -29,7 +29,7 @@ function corsHeaders(request: Request, env: Env): Headers {
     headers.set("access-control-allow-origin", origin);
     headers.set("access-control-allow-credentials", "true");
     headers.set("access-control-allow-headers", "authorization, content-type");
-    headers.set("access-control-allow-methods", "GET, POST, PUT, DELETE, OPTIONS");
+    headers.set("access-control-allow-methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS");
   }
   return headers;
 }
@@ -340,6 +340,19 @@ async function getErrorReport(env: Env, cors: Headers, id: string): Promise<Resp
   return report ? json({ report }, 200, cors) : json({ error: "REPORT_NOT_FOUND" }, 404, cors);
 }
 
+async function updateErrorReportStatus(request: Request, env: Env, cors: Headers, id: string): Promise<Response> {
+  const body = await request.json<{ status?: unknown } | null>().catch(() => null);
+  const allowedStatuses = ["new", "reviewing", "resolved", "closed"];
+  const status = body && typeof body.status === "string" ? body.status : "";
+  if (!allowedStatuses.includes(status)) {
+    return json({ error: "INVALID_REPORT_STATUS" }, 400, cors);
+  }
+  const result = await env.DB.prepare("UPDATE error_reports SET status = ? WHERE id = ?")
+    .bind(status, id).run();
+  if (!result.meta.changes) return json({ error: "REPORT_NOT_FOUND" }, 404, cors);
+  return json({ ok: true, id, status }, 200, cors);
+}
+
 async function savePromotion(request: Request, env: Env, cors: Headers, id?: string): Promise<Response> {
   const body = await request.json<PromotionInput>().catch(() => ({}));
   const input = promotionInput(body);
@@ -456,6 +469,9 @@ export default {
     const errorReportMatch = url.pathname.match(/^\/api\/error-reports\/([0-9a-f-]{36})$/i);
     if (request.method === "GET" && errorReportMatch) {
       return getErrorReport(env, cors, errorReportMatch[1]);
+    }
+    if (request.method === "PATCH" && errorReportMatch) {
+      return updateErrorReportStatus(request, env, cors, errorReportMatch[1]);
     }
 
     if (request.method === "POST" && url.pathname === "/api/promotions") {
